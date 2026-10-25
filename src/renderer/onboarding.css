@@ -1,0 +1,348 @@
+/* LcinoCare — first-run onboarding.
+   Dark theme matches the reference design's measured palette exactly;
+   light theme keeps the same layout with a high-contrast daylight palette. */
+
+/* ── theme variables ─────────────────────────────────────────────────── */
+
+#onboarding {
+  /* light theme (default) */
+  --ob-bg: #faf8fd;
+  --ob-bg-glow-magenta: rgba(224, 2, 158, 0.07);
+  --ob-bg-glow-violet: rgba(80, 0, 234, 0.06);
+  --ob-bg-glow-purple: rgba(140, 40, 190, 0.05);
+  --ob-word: #1d1d1f;
+  --ob-heading: #1d1d1f;
+  --ob-body: #5e5866;
+  --ob-link: #c4088c;
+  --ob-check-border: #c77bb4;
+  --ob-check-fill: #e8029e;
+  --ob-quit: #48444e;
+  --ob-next-bg: linear-gradient(180deg, #ed2fae, #c4088c);
+  --ob-next-glow: rgba(232, 2, 158, 0.35);
+  --ob-next-disabled-bg: #e9dcea;
+  --ob-next-disabled-text: #a08fa6;
+  --ob-ghost-bg: rgba(29, 29, 31, 0.05);
+  --ob-ghost-text: #48444e;
+  --ob-modal-bg: #ffffff;
+  --ob-scan-glow: rgba(196, 0, 227, 0.35);
+}
+
+#onboarding.ob-dark {
+  /* exact sampled reference palette */
+  --ob-bg: #0f0013;
+  --ob-bg-glow-magenta: rgba(224, 2, 158, 0.09);
+  --ob-bg-glow-violet: rgba(70, 0, 200, 0.22);
+  --ob-bg-glow-purple: rgba(120, 20, 190, 0.20);
+  --ob-word: #ffffff;
+  --ob-heading: #ffffff;
+  --ob-body: #b8b2bd;
+  --ob-link: #e8029e;
+  --ob-check-border: #ad2088;
+  --ob-check-fill: #e8029e;
+  --ob-quit: #ffffff;
+  --ob-next-bg: linear-gradient(180deg, #ed2fae, #c4088c);
+  --ob-next-glow: rgba(232, 2, 158, 0.42);
+  --ob-next-disabled-bg: #55285a;
+  --ob-next-disabled-text: rgba(255, 255, 255, 0.42);
+  --ob-ghost-bg: rgba(255, 255, 255, 0.1);
+  --ob-ghost-text: #e6dbea;
+  --ob-modal-bg: #1d0d26;
+  --ob-scan-glow: rgba(196, 0, 227, 0.45);
+}
+
+/* ── root layout ─────────────────────────────────────────────────────── */
+
+#onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(640px 420px at 29% 52%, var(--ob-bg-glow-purple), transparent 62%),
+    radial-gradient(720px 480px at 8% 102%, var(--ob-bg-glow-violet), transparent 62%),
+    radial-gradient(560px 380px at 74% 92%, var(--ob-bg-glow-magenta), transparent 64%),
+    var(--ob-bg);
+  color: var(--ob-heading);
+  animation: obFade .45s ease both;
+}
+@keyframes obFade { from { opacity: 0; } to { opacity: 1; } }
+
+.ob-top {
+  -webkit-app-region: drag;
+  display: flex;
+  justify-content: center;
+  padding: 26px 0 0;
+}
+.ob-wordmark {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--ob-word);
+}
+.ob-wordmark .care { color: var(--ob-link); }
+
+.ob-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 64px;
+  padding: 0 56px;
+  min-height: 0;
+}
+
+.ob-art {
+  flex: 1.05;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.ob-art svg { width: min(360px, 32vw); height: auto; filter: drop-shadow(0 30px 60px rgba(0,0,0,.35)); }
+.ob-art .ob-shadow { fill: #000; opacity: .28; }
+
+#onboarding:not(.ob-dark) .ob-art svg { filter: drop-shadow(0 24px 46px rgba(120, 40, 130, 0.18)); }
+#onboarding:not(.ob-dark) .ob-art .ob-shadow { fill: #6b4a78; opacity: .18; }
+
+.ob-content { flex: 1; max-width: 420px; min-width: 0; }
+
+.ob-step { animation: obStepIn .4s cubic-bezier(.3,.9,.4,1) both; }
+@keyframes obStepIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ob-heading {
+  font-size: 38px;
+  font-weight: 500;
+  letter-spacing: -0.8px;
+  line-height: 1.15;
+  color: var(--ob-heading);
+  margin-bottom: 18px;
+}
+.ob-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ob-body);
+  margin-bottom: 26px;
+  user-select: text;
+}
+.ob-text a {
+  color: var(--ob-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+.ob-text a:hover { text-decoration: underline; }
+
+/* ── checkboxes ──────────────────────────────────────────────────────── */
+
+.ob-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  padding: 5px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ob-heading);
+  user-select: none;
+}
+.ob-check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.ob-box {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 5px;
+  border: 1.5px solid var(--ob-check-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.ob-check input:checked + .ob-box {
+  background: var(--ob-check-fill);
+  border-color: var(--ob-check-fill);
+  box-shadow: 0 2px 10px var(--ob-next-glow);
+}
+.ob-check input:focus-visible + .ob-box {
+  outline: 2px solid var(--ob-link);
+  outline-offset: 2px;
+}
+.ob-box svg { opacity: 0; transform: scale(.5); transition: all .18s cubic-bezier(.34,1.56,.64,1); }
+.ob-check input:checked + .ob-box svg { opacity: 1; transform: scale(1); }
+.ob-check .ob-label a { color: var(--ob-link); text-decoration: none; }
+.ob-check .ob-label a:hover { text-decoration: underline; }
+
+/* ── footer ──────────────────────────────────────────────────────────── */
+
+.ob-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 42px 34px;
+}
+.ob-quit {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ob-quit);
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: opacity .15s;
+}
+.ob-quit:hover { opacity: .72; }
+
+.ob-next {
+  border: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 10px;
+  background: var(--ob-next-bg);
+  box-shadow: 0 6px 18px var(--ob-next-glow);
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .2s ease, filter .2s ease, background .25s ease;
+}
+.ob-next:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 9px 24px var(--ob-next-glow); }
+.ob-next:active { transform: translateY(0) scale(.97); }
+.ob-next:disabled {
+  background: var(--ob-next-disabled-bg);
+  color: var(--ob-next-disabled-text);
+  box-shadow: none;
+  cursor: default;
+  transform: none !important;
+  filter: none;
+}
+
+.ob-inline-cta {
+  display: inline-flex;
+  border: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: var(--ob-next-bg);
+  box-shadow: 0 6px 18px var(--ob-next-glow);
+  cursor: pointer;
+  transition: transform .16s ease, filter .2s ease;
+}
+.ob-inline-cta:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.ob-inline-cta:active { transform: scale(.97); }
+.ob-inline-cta.done { background: var(--ob-ghost-bg); color: var(--ob-ghost-text); box-shadow: none; cursor: default; }
+
+/* ── step 3 — feature rows + big scan button ─────────────────────────── */
+
+.ob-features { display: flex; flex-direction: column; gap: 16px; margin-bottom: 8px; }
+.ob-feature { display: flex; align-items: center; gap: 13px; }
+.ob-tile {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #a833e8, #7b0bb8);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 4px 12px rgba(139,11,184,.4);
+  position: relative;
+  overflow: hidden;
+}
+.ob-tile::after {
+  content: '';
+  position: absolute;
+  left: 10%; right: 10%; top: 4%;
+  height: 44%;
+  border-radius: 999px;
+  background: linear-gradient(rgba(255,255,255,.5), rgba(255,255,255,.06));
+}
+.ob-tile.magenta { background: linear-gradient(160deg, #f030b4, #b40787); box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 4px 12px rgba(232,2,158,.4); }
+.ob-tile.violet { background: linear-gradient(160deg, #8a5cff, #5000ea); box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 4px 12px rgba(80,0,234,.4); }
+.ob-feature .t { font-size: 14px; font-weight: 600; color: var(--ob-heading); }
+.ob-feature .s { font-size: 12px; color: var(--ob-body); margin-top: 1px; line-height: 1.4; }
+
+.ob-scan {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: radial-gradient(circle at 50% 34%, #d429f5, #8b0bb8 78%);
+  box-shadow: inset 0 2px 3px rgba(255,255,255,.35), inset 0 -4px 8px rgba(0,0,0,.22), 0 12px 34px var(--ob-scan-glow);
+  animation: obPulse 2.4s ease-in-out infinite;
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+  z-index: 5;
+}
+.ob-scan:hover { transform: translateX(-50%) scale(1.06); }
+.ob-scan:active { transform: translateX(-50%) scale(.96); }
+@keyframes obPulse {
+  0%, 100% { box-shadow: inset 0 2px 3px rgba(255,255,255,.35), inset 0 -4px 8px rgba(0,0,0,.22), 0 12px 30px var(--ob-scan-glow); }
+  50% { box-shadow: inset 0 2px 3px rgba(255,255,255,.35), inset 0 -4px 8px rgba(0,0,0,.22), 0 12px 30px var(--ob-scan-glow), 0 0 0 10px rgba(196,0,227,.12); }
+}
+
+/* ── mini modal (Terms / Privacy) ────────────────────────────────────── */
+
+.ob-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ob-modal {
+  width: 480px;
+  max-width: 88%;
+  max-height: 72%;
+  overflow-y: auto;
+  background: var(--ob-modal-bg);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  animation: obStepIn .22s ease both;
+}
+.ob-modal h3 { font-size: 15px; margin-bottom: 10px; color: var(--ob-heading); }
+.ob-modal .ob-modal-body { font-size: 13px; line-height: 1.6; color: var(--ob-body); user-select: text; }
+.ob-modal .ob-modal-body p { margin-bottom: 10px; }
+.ob-modal .ob-modal-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.ob-btn-ghost {
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: var(--ob-ghost-bg);
+  color: var(--ob-ghost-text);
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .ob-stage { flex-direction: column; gap: 22px; padding: 0 32px; }
+  .ob-art { justify-content: center; }
+  .ob-art svg { width: min(220px, 40vw); }
+  .ob-content { max-width: 560px; }
+  .ob-heading { font-size: 30px; }
+}

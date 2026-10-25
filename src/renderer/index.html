@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LcinoCare</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="onboarding.css" />
+  <link rel="stylesheet" href="smartcare.css" />
+  <script src="modules.js"></script>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <span id="brand-logo-holder"></span>
+        <div class="brand-text">
+          <div class="brand-name">LcinoCare</div>
+          <div class="brand-slogan">Therapy for Your Mac</div>
+        </div>
+      </div>
+
+      <nav id="nav"></nav>
+
+      <div class="sidebar-footer" id="sidebar-version"></div>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <div style="display:flex;align-items:center;gap:14px">
+          <button id="back-chip" class="hidden"></button>
+          <div id="view-title">Dashboard</div>
+        </div>
+        <div id="search-wrap">
+          <svg viewBox="0 0 24 24" width="15" height="15"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="search-input" type="text" placeholder="Search — cache, large videos, duplicates, apps…  (⌘F)" autocomplete="off" spellcheck="false" />
+          <div id="search-results" class="hidden"></div>
+        </div>
+      </header>
+
+      <div id="content" data-theme="dashboard">
+        <section id="view-smart" class="view hidden"></section>
+        <section id="view-land-cleanup" class="view hidden"></section>
+        <section id="view-land-protection" class="view hidden"></section>
+        <section id="view-land-performance" class="view hidden"></section>
+        <section id="view-land-applications" class="view hidden"></section>
+        <section id="view-land-clutter" class="view hidden"></section>
+        <section id="view-land-spacelens" class="view hidden"></section>
+        <section id="view-land-cloud" class="view hidden"></section>
+        <section id="view-land-tools" class="view hidden"></section>
+        <section id="view-land-activity" class="view hidden"></section>
+        <section id="view-cleanup-manager" class="view mgr-view hidden"></section>
+        <section id="view-perf-manager" class="view mgr-view hidden"></section>
+        <section id="view-dashboard" class="view hidden"></section>
+        <section id="view-clean" class="view hidden"></section>
+        <section id="view-clutter" class="view hidden"></section>
+        <section id="view-duplicates" class="view hidden"></section>
+        <section id="view-files" class="view hidden"></section>
+        <section id="view-apps" class="view hidden"></section>
+        <section id="view-speed" class="view hidden"></section>
+        <section id="view-startup" class="view hidden"></section>
+        <section id="view-protected" class="view hidden"></section>
+        <section id="view-history" class="view hidden"></section>
+      </div>
+    </main>
+  </div>
+
+  <div id="scan-overlay" class="hidden">
+    <div class="scan-card">
+      <span id="scan-logo"></span>
+      <div class="scan-title">Scanning your Mac…</div>
+      <div class="scan-detail" id="scan-detail">Preparing…</div>
+      <div class="scan-bar"><div class="scan-bar-fill" id="scan-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="onboarding" class="hidden"></div>
+
+  <div id="modal-backdrop" class="hidden">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <div id="toast-holder"></div>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

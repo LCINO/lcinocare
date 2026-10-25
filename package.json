@@ -1,0 +1,50 @@
+{
+  "name": "lcinocare",
+  "productName": "LcinoCare",
+  "version": "1.4.0",
+  "description": "Therapy for Your Mac — storage health, junk cleaning, and system care for macOS.",
+  "main": "src/main/main.js",
+  "author": "LCINO",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "scan": "node src/main/scanner.js --cli",
+    "dist": "electron-builder --mac --arm64"
+  },
+  "build": {
+    "appId": "com.lcino.care",
+    "productName": "LcinoCare",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!src/renderer/mock.html",
+      "!src/renderer/mock-bridge.js"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": null,
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  }
+}

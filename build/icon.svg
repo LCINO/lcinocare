@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3be3c4"/>
+      <stop offset="0.55" stop-color="#12b5a0"/>
+      <stop offset="1" stop-color="#0a7d8f"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- macOS-style rounded square -->
+  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#glow)"/>
+
+  <!-- top glass sheen -->
+  <path d="M64 300 C 64 170 170 64 300 64 L 724 64 C 854 64 960 170 960 300 L 960 340 C 780 260 620 236 512 236 C 404 236 244 260 64 340 Z"
+        fill="url(#gloss)" opacity="0.55"/>
+
+  <!-- heart -->
+  <path d="M512 830 C 350 700 240 600 240 460 C 240 356 320 272 416 272 C 458 272 492 288 512 314 C 532 288 566 272 608 272 C 704 272 784 356 784 460 C 784 600 674 700 512 830 Z"
+        fill="#ffffff" opacity="0.96"/>
+
+  <!-- pulse line -->
+  <path d="M300 480 L 400 480 L 448 372 L 544 592 L 600 452 L 632 480 L 724 480"
+        fill="none" stroke="#12b5a0" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- bottom inner shadow hint -->
+  <path d="M64 760 C 200 860 400 900 512 900 C 624 900 824 860 960 760 L 960 756 C 960 844 888 916 800 916 L 224 916 C 136 916 64 844 64 756 Z"
+        fill="#000000" opacity="0.08"/>
+</svg>
