@@ -131,6 +131,7 @@
       art: () => art('#5b8bff', '#2440c8', '#120a52', hexagon(),
         '<path d="M12 3.6l6.4 3.7v7.4L12 18.4l-6.4-3.7V7.3z" fill="#fff"/><path d="M9.7 9.7l4.6 4.6m0-4.6l-4.6 4.6" stroke="#1d4ed8" stroke-width="1.8" stroke-linecap="round"/>'),
       rows: [
+        { icon: 'applications', label: 'App Updater', sub: 'Check the update feeds apps publish themselves', view: 'updates-tool' },
         { icon: 'applications', label: 'App Uninstaller', sub: 'Remove apps with all of their leftovers', view: 'apps' },
         { icon: 'files', label: 'File Leftovers', sub: 'Cast-off files from apps already deleted', view: 'apps' }
       ]
@@ -209,7 +210,8 @@
     { icon: 'speed', label: 'Maintenance Tasks', desc: 'Flush DNS, free RAM, run macOS scripts, reindex Spotlight and more.', view: 'perf-manager', pane: 'maintenance', color: ['#ff6b35', '#c2410c'] },
     { icon: 'files', label: 'Downloads', desc: 'Review and clean one-time files piling up in Downloads.', view: 'downloads-tool', color: ['#0a84ff', '#0a4fa8'] },
     { icon: 'protected', label: 'Privacy Items', desc: 'Remove browsing history, cookies and storage traces.', view: 'privacy-tool', color: ['#ff5fb0', '#a80b6b'] },
-    { icon: 'clutter', label: 'Similar Images', desc: 'Group near-duplicate photos and keep only the best.', view: 'similar-images', color: ['#3fe0d0', '#12869b'] }
+    { icon: 'clutter', label: 'Similar Images', desc: 'Group near-duplicate photos and keep only the best.', view: 'similar-images', color: ['#3fe0d0', '#12869b'] },
+    { icon: 'applications', label: 'App Updater', desc: 'See which apps published a new version — honestly.', view: 'updates-tool', color: ['#5b7cfa', '#2440c8'] }
   ];
 
   function glyph(key, size = 18, color = '#fff') {

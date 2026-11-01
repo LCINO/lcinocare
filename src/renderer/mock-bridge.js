@@ -272,6 +272,15 @@ window.lcino = {
       { id: 'dl-4', label: 'contract-2026.pdf', path: '/Users/anamdev/Downloads/docs/contract-2026.pdf', sizeBytes: 2.2 * MB, mtimeMs: Date.now() - 9 * 86400000, kind: 'document' }
     ]
   }),
+  updatesScan: () => Promise.resolve({
+    ok: true,
+    apps: [
+      { id: 'u1', name: 'WonderGPU', path: '/Applications/WonderGPU.app', version: '1.2', latest: '1.4', hasFeed: true, hasUpdate: true, feedUrl: 'https://wondergpu.example/appcast.xml' },
+      { id: 'u2', name: 'PixelPerfect', path: '/Applications/PixelPerfect.app', version: '3.0', latest: '3.0', hasFeed: true, hasUpdate: false, feedUrl: 'https://pixelperfect.example/appcast.xml' },
+      { id: 'u3', name: 'Telegram', path: '/Applications/Telegram.app', version: '11.4', hasFeed: false, hasUpdate: false, feedUrl: null }
+    ],
+    updates: 1, withFeed: 2, noFeed: 1
+  }),
   privacyScan: () => Promise.resolve({
     ok: true,
     browsers: [

@@ -16,6 +16,7 @@ const search = require('./search');
 const snapshots = require('./snapshots');
 const maintenance = require('./maintenance');
 const downloads = require('./downloads');
+const updates = require('./updates');
 const privacy = require('./privacy');
 const similar = require('./similar');
 const menuBar = require('./menu');
@@ -287,6 +288,19 @@ function wireIpc() {
   });
 
   ipcMain.handle('downloads:scan', () => downloads.scan());
+  ipcMain.handle('updates:scan', (_e) => {
+    scanning = true;
+    try {
+      return updates.scan({ onProgress: emitProgress });
+    } finally {
+      scanning = false;
+    }
+  });
+  ipcMain.handle('open:external', (_e, url) => {
+    if (!/^https?:\/\//.test(String(url))) return { ok: false, reason: 'Only http(s) links can be opened.' };
+    shell.openExternal(String(url));
+    return { ok: true };
+  });
 
   ipcMain.handle('privacy:scan', () => privacy.scan());
   ipcMain.handle('privacy:clean', (_e, items) =>

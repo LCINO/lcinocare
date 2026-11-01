@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('lcino', {
   maintenanceList: () => ipcRenderer.invoke('maintenance:list'),
   maintenanceRun: (ids) => ipcRenderer.invoke('maintenance:run', ids),
   downloadsScan: () => ipcRenderer.invoke('downloads:scan'),
+  updatesScan: () => ipcRenderer.invoke('updates:scan'),
+  openExternal: (url) => ipcRenderer.invoke('open:external', url),
   menuSnapshot: () => ipcRenderer.invoke('menu:snapshot'),
   menuQuickClean: () => ipcRenderer.invoke('menu:quick-clean'),
   appShow: () => ipcRenderer.invoke('app:show'),

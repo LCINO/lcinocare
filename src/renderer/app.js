@@ -115,7 +115,7 @@ const MODULE_PARENT = {
   cleanup: 'cleanup', 'cleanup-manager': 'cleanup', clean: 'cleanup',
   protection: 'protection', protected: 'protection', 'privacy-tool': 'protection',
   performance: 'performance', speed: 'performance', startup: 'performance', 'perf-manager': 'performance',
-  applications: 'applications', apps: 'applications',
+  applications: 'applications', apps: 'applications', 'updates-tool': 'applications',
   clutter: 'clutter', files: 'clutter', duplicates: 'clutter', 'similar-images': 'clutter',
   spacelens: 'spacelens', bubble: 'spacelens',
   cloud: 'cloud',
@@ -141,6 +141,7 @@ const VIEWS = {
   'downloads-tool': { title: 'Downloads', render: renderDownloads, section: 'view-land-downloads' },
   'privacy-tool': { title: 'Privacy Items', render: renderPrivacyTool, section: 'view-land-privacy' },
   'similar-images': { title: 'Similar Images', render: renderSimilarImages, section: 'view-land-similar' },
+  'updates-tool': { title: 'App Updater', render: renderUpdates, section: 'view-land-updates' },
   bubble: { title: 'My Clutter Map', render: renderClutter, section: 'view-clutter' },
   duplicates: { title: 'Duplicates', render: renderDuplicates },
   files: { title: 'Large Files', render: renderFiles },
@@ -1672,6 +1673,66 @@ async function runSimilarScan() {
   renderSimilarImages();
   if (!r.groups.length) toast(`${r.scanned} images hashed — no similar groups found.`);
   else toast(`${r.groupCount} similar group${r.groupCount === 1 ? '' : 's'} found in ${r.scanned} images.`);
+}
+
+
+// ── app updater tool ─────────────────────────────────────────────────────
+
+const ut = { data: null };
+
+function renderUpdates() {
+  const view = $('#view-land-updates');
+  if (!ut.data) { runUpdatesScan(); return; }
+  const { apps, updates, withFeed, noFeed } = ut.data;
+
+  const row = (a, dim = false) => `
+    <div class="mgr-item" style="${dim ? 'opacity:.62' : ''}">
+      ${mgrTile(a.name, a.hasUpdate ? '#ff9f0a' : '#30d158')}
+      <div class="mi-info">
+        <div class="mi-name">${esc(a.name)} <span class="app-ver">${esc(a.version)}${a.hasUpdate ? ' → ' + esc(a.latest) : ''}</span></div>
+        <div class="mi-sub">${a.hasUpdate ? 'New version advertised by the app\'s own update feed' : a.hasFeed ? 'Up to date with its update feed' : 'No public update feed — updates manually'}</div>
+      </div>
+      ${a.hasUpdate && a.feedUrl ? `<button class="btn small primary" data-open="${esc(a.feedUrl)}">Get Update</button>` : ''}
+    </div>`;
+
+  const outdated = apps.filter((a) => a.hasUpdate);
+  const fresh = apps.filter((a) => a.hasFeed && !a.hasUpdate);
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        <button class="mgr-nav active">App Updater</button>
+        <button class="mgr-nav" data-ut-view="apps">Applications</button>
+        <button class="mgr-nav" data-ut-view="downloads-tool">Downloads</button>
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">App Updater</div>
+        <div class="mgr-pane-desc">LcinoCare checks the update feed each app publishes about itself (Sparkle). No invented version numbers, no fake alerts — what the developer advertises is what you see.</div>
+        <div class="mgr-controls">
+          <span class="mgr-note" style="margin:0">${withFeed} app${withFeed === 1 ? '' : 's'} with a public feed · ${noFeed} update manually</span>
+          <button class="mgr-select" id="ut-rescan">↻ Rescan</button>
+        </div>
+        ${outdated.length ? `
+          <div class="section-head" style="margin:6px 2px 8px"><h3 style="font-size:14px">Update available (${outdated.length})</h3></div>
+          ${outdated.map((a) => row(a)).join('')}` : `
+          <div class="mgr-note" style="margin-bottom:14px">✓ Everything with a public feed is up to date.</div>`}
+        ${fresh.length ? `
+          <div class="section-head" style="margin:14px 2px 8px"><h3 style="font-size:14px">Up to date (${fresh.length})</h3></div>
+          ${fresh.map((a) => row(a, true)).join('')}` : ''}
+        ${noFeed ? `<div class="mgr-note" style="margin-top:14px">${noFeed} app${noFeed === 1 ? '' : 's'} don't publish a checkable feed — they update themselves or through the App Store. LcinoCare won't guess for them.</div>` : ''}
+      </div>
+    </div>`;
+
+  view.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => window.lcino.openExternal(b.dataset.open));
+  view.querySelectorAll('[data-ut-view]').forEach((b) => b.onclick = () => showView(b.dataset.utView));
+  $('#ut-rescan').onclick = () => runUpdatesScan();
+}
+
+async function runUpdatesScan() {
+  const view = $('#view-land-updates');
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  ut.data = await window.lcino.updatesScan();
+  renderUpdates();
 }
 
 // ── my clutter (bubble map) ───────────────────────────────────────────────
