@@ -18,6 +18,7 @@ const maintenance = require('./maintenance');
 const downloads = require('./downloads');
 const privacy = require('./privacy');
 const similar = require('./similar');
+const menuBar = require('./menu');
 
 app.setName('LcinoCare');
 
@@ -217,6 +218,38 @@ function wireIpc() {
   ipcMain.handle('item:reveal', (_e, p) => shell.showItemInFolder(p));
 
   ipcMain.handle('app:quit', () => app.quit());
+  ipcMain.handle('app:show', () => {
+    if (!win || win.isDestroyed()) createWindow();
+    else {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+  });
+
+  ipcMain.handle('menu:hide', () => menuBar.hidePopover());
+  ipcMain.handle('menu:snapshot', async () => health.snapshot(lastScan ? lastScan.safeBytes : 0));
+  ipcMain.handle('menu:quick-clean', async () => {
+    if (scanning) return { ok: false, reason: 'A scan is already running.' };
+    scanning = true;
+    try {
+      const result = await scanner.scan(() => {}); // silent — no overlay in the main window
+      lastScan = null;
+      const items = result.groups.flatMap((g) => g.items).filter((i) => i.safety === 'safe');
+      const { results, freedBytes } = await cleaner.clean(items.map((i) => ({ id: i.id, path: i.path, sizeBytes: i.sizeBytes })));
+      const okCount = results.filter((r) => r.ok).length;
+      cleaner.appendHistory(app.getPath('userData'), {
+        at: new Date().toISOString(),
+        kind: 'clean',
+        count: okCount,
+        freedBytes,
+        paths: items.map((i) => i.path)
+      });
+      return { ok: true, freedBytes, count: okCount, skipped: results.length - okCount };
+    } finally {
+      scanning = false;
+    }
+  });
   ipcMain.handle('app:set-login-item', (_e, open) => {
     app.setLoginItemSettings({ openAtLogin: !!open });
     return app.getLoginItemSettings().openAtLogin;
@@ -270,11 +303,23 @@ app.whenReady().then(() => {
   menu();
   wireIpc();
   createWindow();
+  menuBar.createMenu({
+    showMain: () => {
+      if (!win || win.isDestroyed()) createWindow();
+      else {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    },
+    quit: () => app.quit()
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // the menu bar companion keeps LcinoCare alive on macOS
+  if (process.platform !== 'darwin' && !menuBar.isTrayAlive()) app.quit();
 });
