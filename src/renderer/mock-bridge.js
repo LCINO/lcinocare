@@ -266,6 +266,48 @@ window.lcino = {
       { id: 'dl-4', label: 'contract-2026.pdf', path: '/Users/anamdev/Downloads/docs/contract-2026.pdf', sizeBytes: 2.2 * MB, mtimeMs: Date.now() - 9 * 86400000, kind: 'document' }
     ]
   }),
+  privacyScan: () => Promise.resolve({
+    ok: true,
+    browsers: [
+      {
+        id: 'chrome', name: 'Google Chrome', totalBytes: 412 * MB,
+        categories: [
+          { id: 'chrome-history', label: 'Browsing History', sizeBytes: 48 * MB, items: [{ id: 'c-h', path: '~/Library/Application Support/Google/Chrome/Default/History' }] },
+          { id: 'chrome-cookies', label: 'Cookies', sizeBytes: 12 * MB, items: [{ id: 'c-c', path: '~/Library/Application Support/Google/Chrome/Default/Cookies' }] },
+          { id: 'chrome-localstorage', label: 'Local Storage', sizeBytes: 352 * MB, items: [{ id: 'c-l', path: '~/Library/Application Support/Google/Chrome/Default/Local Storage' }] }
+        ]
+      },
+      {
+        id: 'safari', name: 'Safari', totalBytes: 9 * MB, blocked: false,
+        categories: [
+          { id: 'safari-history', label: 'Browsing History', sizeBytes: 6 * MB, items: [{ id: 's-h', path: '~/Library/Safari/History.db' }] },
+          { id: 'safari-cookies', label: 'Cookies', sizeBytes: 3 * MB, items: [{ id: 's-c', path: '~/Library/Safari/Cookies.binarycookies' }] }
+        ]
+      }
+    ],
+    grandTotal: 421 * MB
+  }),
+  privacyClean: (items) => Promise.resolve({ results: items.map((i) => ({ ...i, ok: true })), freedBytes: items.length * 1000 }),
+  similarScan: () => Promise.resolve({
+    ok: true, scanned: 342, totalFiles: 342, groupCount: 2,
+    groups: [
+      {
+        id: 'sg-0',
+        items: [
+          { id: 'si-0-0', path: '/Users/anamdev/Pictures/shoot-2026/IMG_2041.jpg', sizeBytes: 3.4 * MB, mtimeMs: Date.now() - 40 * 86400000, thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=AAAAAA==' },
+          { id: 'si-0-1', path: '/Users/anamdev/Pictures/shoot-2026/IMG_2042.jpg', sizeBytes: 3.1 * MB, mtimeMs: Date.now() - 40 * 86400000, thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=AAAAAA==' },
+          { id: 'si-0-2', path: '/Users/anamdev/Pictures/shoot-2026/IMG_2043.jpg', sizeBytes: 2.8 * MB, mtimeMs: Date.now() - 40 * 86400000, thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=AAAAAA==' }
+        ]
+      },
+      {
+        id: 'sg-1',
+        items: [
+          { id: 'si-1-0', path: '/Users/anamdev/Pictures/moodboard.png', sizeBytes: 820 * 1024, mtimeMs: Date.now() - 90 * 86400000, thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=AAAAAA==' },
+          { id: 'si-1-1', path: '/Users/anamdev/Pictures/moodboard (copy).png', sizeBytes: 810 * 1024, mtimeMs: Date.now() - 88 * 86400000, thumb: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=AAAAAA==' }
+        ]
+      }
+    ]
+  }),
   quitApp: () => { window.__mockQuit = (window.__mockQuit || 0) + 1; },
   setLoginItem: (open) => Promise.resolve(!!open)
 };

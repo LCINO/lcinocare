@@ -48,5 +48,8 @@ contextBridge.exposeInMainWorld('lcino', {
   snapshotsPurge: () => ipcRenderer.invoke('snapshots:purge'),
   maintenanceList: () => ipcRenderer.invoke('maintenance:list'),
   maintenanceRun: (ids) => ipcRenderer.invoke('maintenance:run', ids),
-  downloadsScan: () => ipcRenderer.invoke('downloads:scan')
+  downloadsScan: () => ipcRenderer.invoke('downloads:scan'),
+  privacyScan: () => ipcRenderer.invoke('privacy:scan'),
+  privacyClean: (items) => ipcRenderer.invoke('privacy:clean', items),
+  similarScan: () => ipcRenderer.invoke('similar:scan')
 });

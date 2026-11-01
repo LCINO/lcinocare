@@ -113,10 +113,10 @@ const MODS = window.LcinoModules;
 const MODULE_PARENT = {
   smart: 'smart',
   cleanup: 'cleanup', 'cleanup-manager': 'cleanup', clean: 'cleanup',
-  protection: 'protection', protected: 'protection',
+  protection: 'protection', protected: 'protection', 'privacy-tool': 'protection',
   performance: 'performance', speed: 'performance', startup: 'performance', 'perf-manager': 'performance',
   applications: 'applications', apps: 'applications',
-  clutter: 'clutter', files: 'clutter', duplicates: 'clutter',
+  clutter: 'clutter', files: 'clutter', duplicates: 'clutter', 'similar-images': 'clutter',
   spacelens: 'spacelens', bubble: 'spacelens',
   cloud: 'cloud',
   tools: 'tools', 'downloads-tool': 'tools',
@@ -139,6 +139,8 @@ const VIEWS = {
   'cleanup-manager': { title: 'Cleanup Manager', render: renderCleanupManager },
   'perf-manager': { title: 'Performance Manager', render: renderPerfManager },
   'downloads-tool': { title: 'Downloads', render: renderDownloads, section: 'view-land-downloads' },
+  'privacy-tool': { title: 'Privacy Items', render: renderPrivacyTool, section: 'view-land-privacy' },
+  'similar-images': { title: 'Similar Images', render: renderSimilarImages, section: 'view-land-similar' },
   bubble: { title: 'My Clutter Map', render: renderClutter, section: 'view-clutter' },
   duplicates: { title: 'Duplicates', render: renderDuplicates },
   files: { title: 'Large Files', render: renderFiles },
@@ -1463,6 +1465,203 @@ async function refreshDownloads() {
   dl.items = r.ok ? r.items : [];
   dl.selected.clear();
   renderDownloads();
+}
+
+// ── privacy items tool ───────────────────────────────────────────────────
+
+const pv = { data: null, active: null, selected: new Set() };
+
+const BROWSER_APP = {
+  chrome: 'Google Chrome', edge: 'Microsoft Edge', brave: 'Brave',
+  arc: 'Arc', safari: 'Safari', firefox: 'Firefox'
+};
+
+async function renderPrivacyTool() {
+  const view = $('#view-land-privacy');
+  if (!pv.data) { await refreshPrivacy(); return; }
+  const { browsers } = pv.data;
+  if (!browsers.length) {
+    view.innerHTML = `
+      <div class="mgr two">
+        <div class="mgr-side"><button class="mgr-nav active">Privacy</button></div>
+        <div class="mgr-items">
+          <div class="mgr-empty">
+            <svg viewBox="0 0 92 92" fill="none"><path d="M46 10l30 11v22c0 19-12 31-30 38-18-7-30-19-30-38V21z" fill="#efe9f8"/><path d="M33 46l9 9 17-19" stroke="#b9a3e6" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="me-title">Browsers are tidy</div>
+            <div class="me-sub">No browsing history, cookies, or storage leftovers found<br>in the browsers installed on this Mac.</div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  if (!pv.active || !browsers.some((b) => b.id === pv.active)) pv.active = browsers[0].id;
+  const b = browsers.find((x) => x.id === pv.active);
+  const cats = b.categories;
+  const selectedCats = cats.filter((c) => pv.selected.has(c.id));
+  const selItems = selectedCats.flatMap((c) => c.items);
+  const selBytes = selectedCats.reduce((s, c) => s + c.sizeBytes, 0);
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        ${browsers.map((x) => `<button class="mgr-nav ${x.id === pv.active ? 'active' : ''}" data-pv-nav="${x.id}">${esc(x.name)}</button>`).join('')}
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">${esc(b.name)} Privacy</div>
+        <div class="mgr-pane-desc">Traces ${esc(b.name)} keeps about what you did online. Cleaning sends them to the Trash — the browser simply starts a fresh history. ${esc(b.name)} must quit first; LcinoCare will check.</div>
+        ${b.blocked ? '<div class="mgr-note"><b>macOS is guarding this data.</b> Grant LcinoCare\'s host app Full Disk Access (System Settings → Privacy &amp; Security) to read Safari\'s sizes — cleaning stays blocked until then.</div>' : ''}
+        ${cats.map((c) => `
+          <div class="mgr-item">
+            <input type="checkbox" class="pv-check" data-pv="${esc(c.id)}" ${pv.selected.has(c.id) ? 'checked' : ''} />
+            <div class="mi-info"><div class="mi-name">${esc(c.label)}</div><div class="mi-sub">${c.items.length} file${c.items.length > 1 ? 's' : ''} across profiles</div></div>
+            <div class="mi-size">${fmtBytes(c.sizeBytes)}</div>
+          </div>`).join('')}
+        <div class="mgr-bar">
+          <div class="mb-info">${selItems.length ? `${selItems.length} item${selItems.length > 1 ? 's' : ''} · ${fmtBytes(selBytes)}` : 'Nothing Selected'}</div>
+          <div class="mb-spacer"></div>
+          <button class="mgr-done" id="pv-clean" ${selItems.length && !b.blocked ? '' : 'disabled'}>Clean Selected</button>
+        </div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('[data-pv-nav]').forEach((btn) => btn.onclick = () => { pv.active = btn.dataset.pvNav; pv.selected.clear(); renderPrivacyTool(); });
+  view.querySelectorAll('.pv-check').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) pv.selected.add(cb.dataset.pv);
+    else pv.selected.delete(cb.dataset.pv);
+    const s2 = cats.filter((c) => pv.selected.has(c.id));
+    const it2 = s2.flatMap((c) => c.items);
+    view.querySelector('.mb-info').innerHTML = it2.length
+      ? `${it2.length} item${it2.length > 1 ? 's' : ''} · ${fmtBytes(s2.reduce((s, c) => s + c.sizeBytes, 0))}`
+      : 'Nothing Selected';
+    $('#pv-clean').disabled = !it2.length || b.blocked;
+  }));
+  $('#pv-clean').onclick = async () => {
+    const items = selectedCats.flatMap((c) => c.items.map((i, idx) => ({
+      id: i.id, path: i.path, sizeBytes: idx === 0 ? c.sizeBytes : 0
+    })));
+    const appName = BROWSER_APP[b.id] || b.name;
+    const running = await window.lcino.appRunning([appName]);
+    const doClean = async () => {
+      setOverlay(true, `Cleaning ${appName} privacy items…`, 40);
+      const { results, freedBytes } = await window.lcino.privacyClean(items);
+      setOverlay(false);
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length === results.length) toast(`Could not clean: ${failed[0].reason}`, 'err');
+      else toast(`${fmtBytes(freedBytes)} of privacy traces moved to Trash ✓`);
+      pv.selected.clear();
+      await refreshPrivacy();
+    };
+    if (running.length) {
+      showModal({
+        title: `${appName} needs to quit first`,
+        bodyHtml: `<b>${esc(appName)}</b> is running and locking the files you selected. Quit it gracefully and continue? Unsaved tabs may ask to confirm.`,
+        confirmText: 'Quit & Continue',
+        onConfirm: async () => {
+          await window.lcino.quitApps(running.flatMap((r) => r.pids));
+          for (let i = 0; i < 6; i++) { await sleep(1000); if (!(await window.lcino.appRunning([appName])).length) break; }
+          await doClean();
+        }
+      });
+    } else {
+      await doClean();
+    }
+  };
+}
+
+async function refreshPrivacy() {
+  const view = $('#view-land-privacy');
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  pv.data = await window.lcino.privacyScan();
+  pv.selected.clear();
+  renderPrivacyTool();
+}
+
+// ── similar images tool ──────────────────────────────────────────────────
+
+const si = { groups: null, scanned: 0, selected: new Set() };
+
+function renderSimilarImages() {
+  const view = $('#view-land-similar');
+  if (si.groups === null) {
+    view.innerHTML = `
+      <div class="mgr two">
+        <div class="mgr-side"><button class="mgr-nav active">Similar Images</button></div>
+        <div class="mgr-items">
+          <div class="mgr-empty">
+            <svg viewBox="0 0 92 92" fill="none"><rect x="14" y="18" width="46" height="46" rx="9" fill="#e2f4f6" transform="rotate(-6 37 41)"/><rect x="32" y="26" width="46" height="46" rx="9" fill="#cdeaf0" transform="rotate(5 55 49)"/><circle cx="55" cy="49" r="9" fill="#8fd0dc"/></svg>
+            <div class="me-title">Find near-duplicate photos</div>
+            <div class="me-sub">LcinoCare hashes every image in Pictures and groups the ones that<br>look almost identical — bursts, exports, and copies. Trash-only cleanup.</div>
+            <div style="margin-top:16px"><button class="btn primary" id="si-scan">Scan Pictures</button></div>
+          </div>
+        </div>
+      </div>`;
+    $('#si-scan').onclick = () => runSimilarScan();
+    return;
+  }
+
+  const all = si.groups.flatMap((g) => g.items);
+  const sel = all.filter((i) => si.selected.has(i.path));
+  const selBytes = sel.reduce((s, i) => s + (i.sizeBytes || 0), 0);
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        <button class="mgr-nav active">Similar Images</button>
+        <button class="mgr-nav" id="si-rescan">↻ Rescan</button>
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">Similar Images</div>
+        <div class="mgr-pane-desc">${si.groups.length} similar group${si.groups.length === 1 ? '' : 's'} found in Pictures (${si.scanned} images hashed). The newest copy is suggested to keep — click any thumbnail to change what gets removed.</div>
+        ${si.groups.length ? si.groups.map((g) => `
+          <div class="si-group">
+            <div class="si-group-head">
+              <b>${g.items.length} similar</b>
+              <span>${fmtBytes(g.items.reduce((s, i) => s + i.sizeBytes, 0))} total · potential save ${fmtBytes(g.items.slice(1).reduce((s, i) => s + i.sizeBytes, 0))}</span>
+            </div>
+            <div class="si-thumbs">
+              ${g.items.map((i, idx) => `
+                <div class="si-thumb ${idx === 0 ? 'keep' : ''} ${si.selected.has(i.path) ? 'selected' : ''}" data-si-path="${esc(i.path)}" title="${esc(tilt(i.path))}">
+                  ${i.thumb ? `<img src="${i.thumb}" alt="" />` : '<span class="si-noimg">🖼</span>'}
+                  ${idx === 0 ? '<span class="si-keep">Keep</span>' : ''}
+                  ${si.selected.has(i.path) ? '<span class="si-sel">✕</span>' : ''}
+                </div>`).join('')}
+            </div>
+          </div>`).join('')
+        : '<div class="mgr-note">No similar images found — Pictures is tidy.</div>'}
+        <div class="mgr-bar">
+          <div class="mb-info">${sel.length ? `${sel.length} selected <span>|</span> ${fmtBytes(selBytes)}` : 'Nothing Selected'}</div>
+          <div class="mb-spacer"></div>
+          <button class="mgr-done" id="si-clean" ${sel.length ? '' : 'disabled'}>Move to Trash</button>
+        </div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.si-thumb').forEach((t) => t.onclick = () => {
+    const p = t.dataset.siPath;
+    if (si.selected.has(p)) si.selected.delete(p);
+    else si.selected.add(p);
+    renderSimilarImages();
+  });
+  $('#si-rescan').onclick = () => { si.groups = null; si.selected.clear(); renderSimilarImages(); };
+  $('#si-clean').onclick = () => {
+    const items = sel.map((i) => ({ id: `si-${i.path}`, path: i.path, sizeBytes: i.sizeBytes }));
+    showTrashConfirm(items);
+  };
+}
+
+async function runSimilarScan() {
+  setOverlay(true, 'Hashing images…', 40);
+  const r = await window.lcino.similarScan();
+  setOverlay(false);
+  if (!r.ok) { toast('Similar-image scan failed.', 'err'); return; }
+  si.groups = r.groups;
+  si.scanned = r.scanned || 0;
+  si.selected.clear();
+  // auto-select everything except each group's suggested keeper (first = newest)
+  si.groups.forEach((g) => g.items.slice(1).forEach((i) => si.selected.add(i.path)));
+  renderSimilarImages();
+  if (!r.groups.length) toast(`${r.scanned} images hashed — no similar groups found.`);
+  else toast(`${r.groupCount} similar group${r.groupCount === 1 ? '' : 's'} found in ${r.scanned} images.`);
 }
 
 // ── my clutter (bubble map) ───────────────────────────────────────────────

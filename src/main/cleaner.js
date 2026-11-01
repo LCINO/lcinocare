@@ -116,14 +116,20 @@ function findRunningApps(processNames) {
   });
 }
 
-async function clean(items, { onProgress = () => {} } = {}) {
+async function clean(items, { onProgress = () => {}, allowPaths = [] } = {}) {
+  // allowPaths — a very narrow, caller-justified exception to the blocklist.
+  // Used ONLY by the Privacy tool for two exact Safari files (History.db,
+  // Cookies.binarycookies): the blocklist protects users from catastrophic
+  // deletes, while these two specific files are what any real privacy cleaner
+  // must be able to clear — and they still go through the Trash-first flow.
+  const allowed = new Set(allowPaths.map((p) => path.resolve(p)));
   const results = [];
   let freedBytes = 0;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     onProgress(i + 1, items.length, item.path);
     const base = { id: item.id, path: item.path, sizeBytes: item.sizeBytes || 0 };
-    if (isProtected(item.path)) {
+    if (isProtected(item.path) && !allowed.has(path.resolve(item.path))) {
       results.push({ ...base, ok: false, reason: 'This location is protected and cannot be deleted.' });
       continue;
     }

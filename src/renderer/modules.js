@@ -100,6 +100,7 @@
         '<path d="M8.2 11V6.4a1.15 1.15 0 0 1 2.3 0V10m0-4.4V4.8a1.15 1.15 0 0 1 2.3 0V10m0-4.6a1.15 1.15 0 0 1 2.3 0V11m0-4a1.15 1.15 0 0 1 2.3 0v5.4c0 3.6-2.4 6.4-5.8 6.4-2.8 0-4.1-1.4-5.3-3.4L4.6 12.6c-.6-1-.2-2 .8-2.4.8-.3 1.7 0 2.2.8z" fill="#fff"/>'),
       rows: [
         { icon: 'shield', label: 'Safety Blocklist', sub: 'System zones that can never be touched', view: 'protected' },
+        { icon: 'protected', label: 'Privacy Items', sub: 'History, cookies and storage left by browsers', view: 'privacy-tool' },
         { icon: 'trash', label: 'Trash-Only Deletion', sub: 'Nothing is erased without a second confirm', view: 'protected' },
         { icon: 'smart', label: 'App Quit Checks', sub: 'Apps quit gracefully before any cleanup', view: 'protected' }
       ]
@@ -206,7 +207,9 @@
     { icon: 'trash', label: 'Trash Bins', desc: 'Empty all of the available Trash Bins on your Mac.', view: 'cleanup-manager', pane: 'trash', color: ['#a5c9ff', '#3e6fd9'] },
     { icon: 'tm', label: 'Time Machine Snapshots', desc: 'Review and purge local Time Machine snapshots.', action: 'snapshots', color: ['#ffd35a', '#e0821a'] },
     { icon: 'speed', label: 'Maintenance Tasks', desc: 'Flush DNS, free RAM, run macOS scripts, reindex Spotlight and more.', view: 'perf-manager', pane: 'maintenance', color: ['#ff6b35', '#c2410c'] },
-    { icon: 'files', label: 'Downloads', desc: 'Review and clean one-time files piling up in Downloads.', view: 'downloads-tool', color: ['#0a84ff', '#0a4fa8'] }
+    { icon: 'files', label: 'Downloads', desc: 'Review and clean one-time files piling up in Downloads.', view: 'downloads-tool', color: ['#0a84ff', '#0a4fa8'] },
+    { icon: 'protected', label: 'Privacy Items', desc: 'Remove browsing history, cookies and storage traces.', view: 'privacy-tool', color: ['#ff5fb0', '#a80b6b'] },
+    { icon: 'clutter', label: 'Similar Images', desc: 'Group near-duplicate photos and keep only the best.', view: 'similar-images', color: ['#3fe0d0', '#12869b'] }
   ];
 
   function glyph(key, size = 18, color = '#fff') {

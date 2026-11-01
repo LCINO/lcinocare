@@ -16,6 +16,8 @@ const search = require('./search');
 const snapshots = require('./snapshots');
 const maintenance = require('./maintenance');
 const downloads = require('./downloads');
+const privacy = require('./privacy');
+const similar = require('./similar');
 
 app.setName('LcinoCare');
 
@@ -240,6 +242,19 @@ function wireIpc() {
   });
 
   ipcMain.handle('downloads:scan', () => downloads.scan());
+
+  ipcMain.handle('privacy:scan', () => privacy.scan());
+  ipcMain.handle('privacy:clean', (_e, items) =>
+    cleaner.clean(items, { allowPaths: privacy.SAFARI_ALLOW }));
+
+  ipcMain.handle('similar:scan', async () => {
+    scanning = true;
+    try {
+      return await similar.scan({ onProgress: emitProgress });
+    } finally {
+      scanning = false;
+    }
+  });
 
   ipcMain.handle('app:info', () => ({
     name: 'LcinoCare',
