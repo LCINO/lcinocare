@@ -457,10 +457,10 @@ function showTrashConfirm(items) {
       const { results, freedBytes } = await window.lcino.clean(items);
       setOverlay(false);
       const failed = results.filter((r) => !r.ok);
-      if (failed.length) toast(`Moved ${fmtBytes(freedBytes)} to Trash · ${failed.length} skipped (${failed[0].reason})`, failed.length === results.length ? 'err' : 'ok');
-      else toast(`${fmtBytes(freedBytes)} moved to Trash ✓`);
+      const okCount = results.length - failed.length;
       await runScan2({ silent: true });
       if (freedBytes > 0) {
+        showCelebration(freedBytes, okCount, async () => {
         showModal({
           title: 'Empty the Trash now?',
           bodyHtml: `<b>${fmtBytes(freedBytes)}</b> is now sitting in the Trash, still using disk space.
@@ -475,9 +475,30 @@ function showTrashConfirm(items) {
             await runScan2({ silent: true });
           }
         });
+        });
+      } else {
+        toast(failed.length ? `Nothing moved — ${failed[0].reason}` : 'Items were already gone.', failed.length ? 'err' : 'ok');
       }
     }
   });
+}
+
+// Post-clean celebration — the reward moment after a successful cleanup.
+function showCelebration(freedBytes, count, onDone) {
+  showModal({
+    title: 'Sparkling clean!',
+    bodyHtml: `
+      <div class="celebrate">
+        <div class="celebrate-emoji">🎉</div>
+        <div class="celebrate-num" id="cele-num">0 GB</div>
+        <div class="celebrate-sub">${count} item${count === 1 ? '' : 's'} moved to the Trash — recoverable, as always.</div>
+      </div>`,
+    confirmText: 'Nice!',
+    onConfirm: onDone
+  });
+  document.getElementById('modal-cancel')?.classList.add('hidden'); // no "Cancel" on a celebration
+  const numEl = document.getElementById('cele-num');
+  if (numEl) countUp(numEl, freedBytes / 1073741824, (v) => `${v.toFixed(1)} GB`, 1100);
 }
 
 async function confirmClean(items) {
@@ -855,35 +876,80 @@ function renderLanding(id) {
 // ── my tools ──────────────────────────────────────────────────────────────
 
 function renderTools() {
-  const view = $(`#${VIEWS.tools.section}`);
+  const view = $('#view-land-tools');
   const t = MODS.byId('tools').theme;
+  let favs = [];
+  try { favs = JSON.parse(localStorage.getItem('lcino.tools.favs') || '[]'); } catch { favs = []; }
+  const query = (renderTools._q || '').toLowerCase();
+
+  const ordered = [...MODS.TOOLS].sort((a, b) => (favs.includes(b.label) - favs.includes(a.label)) || a.label.localeCompare(b.label));
+
   view.innerHTML = `
     <div class="tools-wrap" style="--m-from:${t.from};--m-to:${t.to};--m-deep:${t.deep};--m-pill:${t.pill}">
       <h1 class="ml-title">My Tools</h1>
-      <p class="ml-tagline">Quick tools for focused tasks — every card runs a real engine, nothing is decoration.</p>
-      <div class="tools-grid">
-        ${MODS.TOOLS.map((tool, i) => `
-          <div class="tool-card" data-tool="${i}" role="button" tabindex="0">
+      <p class="ml-tagline">Quick tools for focused tasks — every card runs a real engine, nothing is decoration. Star the ones you use most.</p>
+      <div class="tools-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="tools-search" type="text" placeholder="Search tools…" value="${esc(renderTools._q || '')}" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="tools-grid" id="tools-grid">
+        ${ordered.map((tool) => {
+          const isFav = favs.includes(tool.label);
+          const hay = (tool.label + ' ' + tool.desc).toLowerCase();
+          const hidden = query && !hay.includes(query);
+          return `
+          <div class="tool-card ${isFav ? 'fav' : ''}" data-tool="${esc(tool.label)}" style="${hidden ? 'display:none' : ''}" role="button" tabindex="0">
+            <button class="tool-star ${isFav ? 'on' : ''}" data-fav="${esc(tool.label)}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="${isFav ? '#ffd60a' : 'none'}" stroke="${isFav ? '#ffd60a' : 'currentColor'}" stroke-width="1.6"><path d="M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.3L12 17l-5.7 3 1.2-6.3L2.8 9.3l6.4-.8z"/></svg>
+            </button>
             <span class="tool-ico" style="background:linear-gradient(145deg,${tool.color[0]},${tool.color[1]})">${MODS.glyph(tool.icon, 20, '#fff')}</span>
             <div class="tool-name">${esc(tool.label)}</div>
             <div class="tool-desc">${esc(tool.desc)}</div>
             <button class="tool-scan">Scan</button>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
+      <div class="tool-empty" id="tool-empty" style="display:none">No tools match your search.</div>
     </div>`;
 
   const open = (tool) => {
     if (tool.action === 'snapshots') openSnapshots();
     else openView(tool.view, tool.pane);
   };
-  view.querySelectorAll('.tool-card').forEach((card) => {
-    const tool = MODS.TOOLS[Number(card.dataset.tool)];
-    card.onclick = (e) => { if (!e.target.closest('.tool-scan')) open(tool); };
-    card.onkeydown = (e) => { if (e.key === 'Enter') open(tool); };
+
+  const cards = [...view.querySelectorAll('.tool-card')];
+  cards.forEach((card) => {
+    const tool = MODS.TOOLS.find((x) => x.label === card.dataset.tool);
+    card.onclick = (e) => { if (!e.target.closest('.tool-star') && !e.target.closest('.tool-scan')) open(tool); };
+    card.onkeydown = (e) => { if (e.key === 'Enter' && !e.target.closest('.tool-star, .tool-scan')) open(tool); };
   });
-  view.querySelectorAll('.tool-scan').forEach((btn) => {
-    btn.onclick = (e) => open(MODS.TOOLS[Number(e.target.closest('.tool-card').dataset.tool)]);
+  view.querySelectorAll('.tool-scan').forEach((btn) => btn.onclick = (e) => {
+    e.stopPropagation();
+    const card = e.target.closest('.tool-card');
+    open(MODS.TOOLS.find((x) => x.label === card.dataset.tool));
   });
+  view.querySelectorAll('.tool-star').forEach((star) => star.onclick = (e) => {
+    e.stopPropagation();
+    const label = star.dataset.fav;
+    const cur = new Set(JSON.parse(localStorage.getItem('lcino.tools.favs') || '[]'));
+    if (cur.has(label)) cur.delete(label); else cur.add(label);
+    localStorage.setItem('lcino.tools.favs', JSON.stringify([...cur]));
+    renderTools(); // re-render — favorites float to the top
+  });
+  const search = view.querySelector('#tools-search');
+  search.oninput = () => {
+    renderTools._q = search.value;
+    const q = search.value.toLowerCase();
+    let any = false;
+    cards.forEach((card) => {
+      const tool = MODS.TOOLS.find((x) => x.label === card.dataset.tool);
+      const hay = (tool.label + ' ' + tool.desc).toLowerCase();
+      const show = !q || hay.includes(q);
+      card.style.display = show ? '' : 'none';
+      any = any || show;
+    });
+    document.getElementById('tool-empty').style.display = any ? 'none' : '';
+  };
 }
 
 async function openSnapshots() {
