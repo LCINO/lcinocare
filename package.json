@@ -1,8 +1,8 @@
 {
   "name": "lcinocare",
   "productName": "LcinoCare",
-  "version": "1.9.0",
-  "description": "Therapy for Your Mac — storage health, junk cleaning, and system care for macOS.",
+  "version": "1.10.0",
+  "description": "Therapy for Your Mac \u2014 storage health, junk cleaning, and system care for macOS.",
   "main": "src/main/main.js",
   "author": "LCINO",
   "license": "MIT",
@@ -41,10 +41,18 @@
       "identity": null,
       "category": "public.app-category.utilities",
       "icon": "build/icon.icns"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LCINO",
+      "repo": "lcinocare"
     }
   },
   "devDependencies": {
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   }
 }

@@ -68,3 +68,17 @@ body {
 }
 
 .pop-foot { display: flex; justify-content: space-between; padding: 9px 4px 2px; font-size: 10.5px; color: rgba(255, 255, 255, 0.35); }
+
+.upd-chip {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  font: inherit; font-size: 12px; font-weight: 700; color: #fff;
+  padding: 9px 12px; margin-bottom: 10px;
+  border-radius: 11px; border: 1px solid rgba(242, 47, 192, 0.5);
+  background: linear-gradient(180deg, rgba(242, 47, 192, 0.28), rgba(141, 6, 112, 0.28));
+  cursor: pointer;
+  text-align: left;
+}
+.upd-chip:hover { background: linear-gradient(180deg, rgba(242, 47, 192, 0.4), rgba(141, 6, 112, 0.4)); }
+.uc-dot { width: 8px; height: 8px; border-radius: 4px; background: #f22fc0; box-shadow: 0 0 8px rgba(242, 47, 192, 0.9); flex-shrink: 0; }
+.uc-arrow { margin-left: auto; color: #ffb8ea; font-size: 11px; }

@@ -768,3 +768,29 @@ table.tbl tbody tr:hover { background: var(--row-hover); }
 .startup-row .s-name { font-weight: 600; }
 .startup-row .s-path { color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .startup-row .badge.system { background: var(--chip); color: var(--text-2); }
+
+/* ── self-update banner ─────────────────────────────────────────────────── */
+
+.update-banner {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 24px 4px;
+  padding: 10px 14px;
+  border-radius: 13px;
+  font-size: 13px;
+  color: var(--text);
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(120deg, rgba(242, 47, 192, 0.65), rgba(109, 0, 151, 0.3)) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 8px 24px rgba(90, 0, 60, 0.18);
+  animation: cardIn .4s cubic-bezier(.3,.9,.4,1) both;
+}
+.update-banner.err { border-color: rgba(255, 69, 58, 0.4); }
+.ub-dot { width: 9px; height: 9px; border-radius: 5px; background: var(--magenta, #f22fc0); box-shadow: 0 0 10px rgba(242, 47, 192, 0.8); flex-shrink: 0; animation: floaty 2.6s ease-in-out infinite; }
+.ub-dot.dl { background: #30d158; box-shadow: 0 0 10px rgba(48, 209, 88, 0.8); animation: none; }
+.ub-text { flex: 1; line-height: 1.4; }
+.ub-x { padding: 4px 9px !important; }

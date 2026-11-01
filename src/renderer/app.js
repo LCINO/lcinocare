@@ -2504,5 +2504,97 @@ document.addEventListener('DOMContentLoaded', async () => {
   // No automatic scan on launch — Smart Care's landing invites the first Scan.
   if (window.LcinoOnboarding && window.LcinoOnboarding.shouldShow()) {
     window.LcinoOnboarding.show(() => runScan2());
+  } else {
+    setTimeout(doUpdateCheck, 6000); // quiet update check after launch
+  }
+  if (window.lcino.onCheckUpdates) {
+    window.lcino.onCheckUpdates(() => doUpdateCheck(true));
+  }
+  if (window.lcino.onUpdateEvent) {
+    window.lcino.onUpdateEvent((ev) => renderUpdateBanner(ev));
   }
 });
+
+// ── self-update banner (Phase C) ─────────────────────────────────────────
+
+const UB = { dismissedFor: null, downloading: false, downloaded: false };
+
+function renderUpdateBanner(ev) {
+  if (!ev) return;
+  if (ev.status === 'available') {
+    UB.version = ev.version;
+    if (UB.dismissedFor === ev.version) return;
+    drawUpdateBanner({ mode: 'available', version: ev.version });
+  } else if (ev.status === 'downloading') {
+    drawUpdateBanner({ mode: 'downloading', pct: ev.pct });
+  } else if (ev.status === 'downloaded') {
+    drawUpdateBanner({ mode: 'downloaded', version: ev.version });
+  } else if (ev.status === 'error') {
+    drawUpdateBanner({ mode: 'error', message: ev.error });
+  } else if (ev.status === 'none') {
+    const el = document.getElementById('update-banner');
+    if (el) el.remove();
+    if (UB.silentCheck) toast('LcinoCare is up to date ✓');
+  }
+}
+
+function drawUpdateBanner({ mode, version, pct, message }) {
+  const main = $('#main');
+  let el = document.getElementById('update-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'update-banner';
+    el.className = 'update-banner';
+    main.insertBefore(el, main.querySelector('#content'));
+  }
+  if (mode === 'available') {
+    el.classList.remove('err');
+    el.innerHTML = `
+      <span class="ub-dot"></span>
+      <span class="ub-text"><b>LcinoCare ${esc(version)}</b> is out — your Mac deserves the latest care.</span>
+      <button class="btn small primary" id="ub-download">Download Update</button>
+      <button class="btn small ghost ub-x" id="ub-dismiss" title="Hide until next version">✕</button>`;
+    $('#ub-download').onclick = async () => {
+      const r = await window.lcino.updateDownload();
+      if (r && r.fallback) { await window.lcino.openExternal('https://github.com/LCINO/lcinocare/releases/latest/download/LcinoCare-arm64.dmg'); }
+    };
+    $('#ub-dismiss').onclick = () => { UB.dismissedFor = UB.version; el.remove(); };
+  } else if (mode === 'downloading') {
+    el.classList.remove('err');
+    el.innerHTML = `<span class="ub-dot dl"></span><span class="ub-text">Downloading update… <b>${pct || 0}%</b></span>`;
+  } else if (mode === 'downloaded') {
+    el.classList.remove('err');
+    el.innerHTML = `
+      <span class="ub-dot dl"></span>
+      <span class="ub-text"><b>Update downloaded.</b> Relaunch to install — it takes two seconds.</span>
+      <button class="btn small primary" id="ub-install">Install & Relaunch</button>`;
+    $('#ub-install').onclick = async () => {
+      const r = await window.lcino.updateInstall();
+      if (r && !r.ok) await window.lcino.openExternal('https://github.com/LCINO/lcinocare/releases/latest/download/LcinoCare-arm64.dmg');
+    };
+  } else if (mode === 'error') {
+    el.classList.add('err');
+    el.innerHTML = `<span class="ub-text">Update check failed — <span style="opacity:.7">${esc(message || 'unknown error')}</span>. You can always download the latest DMG from <a href="#" id="ub-fallback" style="color:var(--acc);text-decoration:underline">GitHub</a>.</span><button class="btn small ghost ub-x" id="ub-dismiss">✕</button>`;
+    $('#ub-fallback').onclick = () => window.lcino.openExternal('https://github.com/LCINO/lcinocare/releases/latest');
+    $('#ub-dismiss').onclick = () => el.remove();
+  }
+}
+
+async function doUpdateCheck(manual = false) {
+  try {
+    UB.silentCheck = !manual;
+    const r = await window.lcino.updateCheck();
+    if (r.hasUpdate) {
+      renderUpdateBanner({ status: 'available', version: r.version });
+      if (manual) toast(`LcinoCare ${r.version} is available!`);
+    } else if (manual) {
+      toast('LcinoCare is up to date ✓');
+      document.getElementById('update-banner')?.remove();
+    } else if (r.error && manual) {
+      toast(`Update check failed — ${r.error}`, 'err');
+    }
+    UB.silentCheck = false;
+  } catch { /* offline — stay quiet */ }
+}
+
+// ── my clutter (bubble map) ───────────────────────────────────────────────

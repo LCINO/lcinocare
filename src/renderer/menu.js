@@ -23,6 +23,22 @@ function renderMetrics(s) {
   $('#b-disk').style.width = `${100 - Math.round((disk.freeBytes / (disk.totalBytes || 1)) * 100)}%`;
 }
 
+async function pollUpdate() {
+  if (!lcino || document.visibilityState === 'hidden') return;
+  try {
+    const r = await lcino.updateCheck();
+    const chip = document.getElementById('upd-chip');
+    if (!chip) return;
+    if (r.hasUpdate) {
+      chip.classList.remove('hidden');
+      document.getElementById('upd-ver').textContent = 'v' + r.version;
+      chip.onclick = () => { lcino.appShow(); lcino.menuHide(); };
+    } else {
+      chip.classList.add('hidden');
+    }
+  } catch { /* offline */ }
+}
+
 async function poll() {
   if (document.visibilityState === 'hidden') return;
   try {
@@ -113,6 +129,8 @@ document.addEventListener('keydown', (e) => {
 })();
 
 // poll while visible
-document.addEventListener('visibilitychange', poll);
+document.addEventListener('visibilitychange', () => { poll(); pollUpdate(); });
 setInterval(poll, 3000);
+setInterval(pollUpdate, 15000);
 poll();
+pollUpdate();

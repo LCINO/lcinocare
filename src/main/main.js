@@ -20,6 +20,7 @@ const updates = require('./updates');
 const privacy = require('./privacy');
 const similar = require('./similar');
 const menuBar = require('./menu');
+const { cmpVersion } = require('./updates');
 
 app.setName('LcinoCare');
 
@@ -55,6 +56,10 @@ function menu() {
       label: 'LcinoCare',
       submenu: [
         { label: 'About LcinoCare', role: 'about' },
+        { label: 'Check for Updates…', click: () => {
+            const w = BrowserWindow.getAllWindows()[0];
+            if (w && !w.isDestroyed()) w.webContents.send('lcino:check-updates');
+          } },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'quit' }
@@ -100,6 +105,66 @@ async function runScan() {
     scanning = false;
   }
 }
+
+
+// ── app self-update (Phase C) ─────────────────────────────────────────────
+// Two layers, both honest:
+//   1. electron-updater (Squirrel.Mac) — download + in-place install + relaunch.
+//      Enabled when available; on unsigned builds Squirrel skips signature
+//      validation, and any failure falls back to layer 2.
+//   2. GitHub Releases check — always works: detect a newer release and point
+//      the user at the stable DMG download.
+
+let updaterState = { status: 'idle', version: null, pct: null, error: null };
+
+function sendUpdateEvent(ev) {
+  updaterState = { ...updaterState, ...ev };
+  if (win && !win.isDestroyed()) win.webContents.send('lcino:update-event', ev);
+}
+
+function setupAutoUpdater() {
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = false; // user decides — our promise is no silent changes
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('checking-for-update', () => sendUpdateEvent({ status: 'checking' }));
+    autoUpdater.on('update-available', (i) => sendUpdateEvent({ status: 'available', version: i.version }));
+    autoUpdater.on('update-not-available', () => sendUpdateEvent({ status: 'none' }));
+    autoUpdater.on('download-progress', (p) => sendUpdateEvent({ status: 'downloading', pct: Math.round(p.percent) }));
+    autoUpdater.on('update-downloaded', (i) => sendUpdateEvent({ status: 'downloaded', version: i.version }));
+    autoUpdater.on('error', (e) => sendUpdateEvent({ status: 'error', error: String(e).slice(0, 140) }));
+    return autoUpdater;
+  } catch (e) {
+    console.warn('[updater] electron-updater unavailable — GitHub fallback only:', String(e).slice(0, 100));
+    return null;
+  }
+}
+
+let autoUpdaterRef = null;
+
+async function githubUpdateCheck() {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const r = await fetch('https://api.github.com/repos/LCINO/lcinocare/releases/latest', {
+      headers: { 'User-Agent': 'LcinoCare' }, signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!r.ok) return { hasUpdate: false, error: 'GitHub returned ' + r.status };
+    const j = await r.json();
+    const version = String(j.tag_name || '').replace(/^v/, '');
+    return {
+      hasUpdate: cmpVersion(version, app.getVersion()) > 0,
+      version,
+      url: 'https://github.com/LCINO/lcinocare/releases/latest/download/LcinoCare-arm64.dmg',
+      notes: j.name || '',
+      page: j.html_url
+    };
+  } catch (e) {
+    return { hasUpdate: false, error: String(e).slice(0, 120) };
+  }
+}
+
 
 function wireIpc() {
   ipcMain.handle('scan:run', () => runScan());
@@ -230,6 +295,34 @@ function wireIpc() {
 
   ipcMain.handle('item:reveal', (_e, p) => shell.showItemInFolder(p));
 
+  ipcMain.handle('update:check', async () => {
+    if (autoUpdaterRef) {
+      try {
+        const r = await autoUpdaterRef.checkForUpdates();
+        const v = r && r.updateInfo ? r.updateInfo.version : null;
+        const has = v ? cmpVersion(v, app.getVersion()) > 0 : false;
+        if (has) sendUpdateEvent({ status: 'available', version: v });
+        return { hasUpdate: has, version: v, engine: 'electron-updater', url: 'https://github.com/LCINO/lcinocare/releases/latest/download/LcinoCare-arm64.dmg' };
+      } catch (e) {
+        sendUpdateEvent({ status: 'error', error: String(e).slice(0, 140) });
+        // fall through to GitHub check
+      }
+    }
+    const gh = await githubUpdateCheck();
+    if (gh.hasUpdate) sendUpdateEvent({ status: 'available', version: gh.version });
+    return { hasUpdate: gh.hasUpdate, version: gh.version, engine: 'github', url: gh.url, notes: gh.notes };
+  });
+  ipcMain.handle('update:download', async () => {
+    if (!autoUpdaterRef) return { ok: false, fallback: true };
+    try { await autoUpdaterRef.downloadUpdate(); return { ok: true }; }
+    catch (e) { return { ok: false, fallback: true, reason: String(e).slice(0, 120) }; }
+  });
+  ipcMain.handle('update:install', () => {
+    if (!autoUpdaterRef) return { ok: false };
+    try { autoUpdaterRef.quitAndInstall(); return { ok: true }; }
+    catch (e) { return { ok: false, reason: String(e).slice(0, 120) }; }
+  });
+  ipcMain.handle('update:state', () => updaterState);
   ipcMain.handle('app:quit', () => app.quit());
   ipcMain.handle('app:show', () => {
     if (!win || win.isDestroyed()) createWindow();
@@ -329,6 +422,7 @@ app.whenReady().then(() => {
   menu();
   wireIpc();
   createWindow();
+  autoUpdaterRef = setupAutoUpdater();
   menuBar.createMenu({
     showMain: () => {
       if (!win || win.isDestroyed()) createWindow();
