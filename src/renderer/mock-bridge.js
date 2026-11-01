@@ -244,6 +244,28 @@ window.lcino = {
     ]
   }),
   snapshotsPurge: () => Promise.resolve({ ok: true, deleted: 3 }),
+  maintenanceList: () => Promise.resolve([
+    { id: 'flush-dns', label: 'Flush DNS Cache', needsAdmin: true, description: 'Clears the local DNS lookup cache.' },
+    { id: 'free-ram', label: 'Free Up RAM', needsAdmin: true, description: 'Purges inactive memory and purgeable caches.' },
+    { id: 'maintenance-scripts', label: 'Run Maintenance Scripts', needsAdmin: true, description: 'Runs daily/weekly/monthly housekeeping scripts.' },
+    { id: 'reindex-spotlight', label: 'Reindex Spotlight', needsAdmin: true, description: 'Rebuilds the Spotlight index.' },
+    { id: 'speed-up-mail', label: 'Speed Up Mail', needsAdmin: false, description: 'Compacts the local Mail database.', requiresAppQuit: ['Mail'] },
+    { id: 'verify-disk', label: 'Verify Startup Disk', needsAdmin: false, description: 'Read-only integrity check of the startup volume.' }
+  ]),
+  maintenanceRun: (ids) => Promise.resolve({
+    results: ids.map((id) => ({ id, ok: true, detail: 'Completed.' }))
+  }),
+  downloadsScan: () => Promise.resolve({
+    ok: true,
+    root: '/Users/anamdev/Downloads',
+    totalBytes: 1.24 * GB,
+    items: [
+      { id: 'dl-1', label: 'Leads-gorilla-2.1-1.mp4', path: '/Users/anamdev/Downloads/Leads-gorilla-2.1-1.mp4', sizeBytes: 116 * MB, mtimeMs: Date.now() - 15 * 86400000, kind: 'video' },
+      { id: 'dl-2', label: 'LcinoCare-1.4.0-arm64.dmg', path: '/Users/anamdev/Downloads/LcinoCare-1.4.0-arm64.dmg', sizeBytes: 124 * MB, mtimeMs: Date.now() - 3 * 86400000, kind: 'installer' },
+      { id: 'dl-3', label: 'AI Video Making Class- 5.mp4', path: '/Users/anamdev/Downloads/AI Video Making Class- 5.mp4', sizeBytes: 157 * MB, mtimeMs: Date.now() - 30 * 86400000, kind: 'video' },
+      { id: 'dl-4', label: 'contract-2026.pdf', path: '/Users/anamdev/Downloads/docs/contract-2026.pdf', sizeBytes: 2.2 * MB, mtimeMs: Date.now() - 9 * 86400000, kind: 'document' }
+    ]
+  }),
   quitApp: () => { window.__mockQuit = (window.__mockQuit || 0) + 1; },
   setLoginItem: (open) => Promise.resolve(!!open)
 };

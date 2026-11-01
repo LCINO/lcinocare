@@ -14,6 +14,8 @@ const uninstaller = require('./uninstaller');
 const startup = require('./startup');
 const search = require('./search');
 const snapshots = require('./snapshots');
+const maintenance = require('./maintenance');
+const downloads = require('./downloads');
 
 app.setName('LcinoCare');
 
@@ -220,6 +222,24 @@ function wireIpc() {
 
   ipcMain.handle('snapshots:list', () => snapshots.list());
   ipcMain.handle('snapshots:purge', () => snapshots.purge());
+
+  ipcMain.handle('maintenance:list', () => maintenance.TASKS.map(({ run, ...meta }) => meta));
+  ipcMain.handle('maintenance:run', async (_e, ids) => {
+    const results = [];
+    for (let i = 0; i < ids.length; i++) {
+      const task = maintenance.TASKS.find((t) => t.id === ids[i]);
+      if (!task) { results.push({ id: ids[i], ok: false, reason: 'Unknown task.' }); continue; }
+      emitProgress({ stage: 'maintenance', done: i, total: ids.length, detail: task.label });
+      try {
+        results.push({ id: task.id, label: task.label, ...(await task.run()) });
+      } catch (err) {
+        results.push({ id: task.id, label: task.label, ok: false, reason: String(err.message || err) });
+      }
+    }
+    return { results };
+  });
+
+  ipcMain.handle('downloads:scan', () => downloads.scan());
 
   ipcMain.handle('app:info', () => ({
     name: 'LcinoCare',

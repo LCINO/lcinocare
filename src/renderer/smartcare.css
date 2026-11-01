@@ -821,6 +821,14 @@ html[data-force-theme="dark"] .mgr {
   margin-bottom: 12px;
 }
 
+/* maintenance task rows */
+.maint-item { align-items: flex-start; padding: 12px 10px; }
+.maint-item .mi-sub { line-height: 1.5; margin-top: 2px; }
+.mt-line { padding: 7px 0; font-size: 13px; line-height: 1.5; }
+.mt-line.ok b { color: var(--good, #34c759); }
+.mt-line.err b { color: var(--bad, #ff453a); }
+.mt-line.err { color: var(--text-2); }
+
 .mgr-trash-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 
 @media (max-width: 1060px) {

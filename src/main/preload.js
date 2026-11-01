@@ -45,5 +45,8 @@ contextBridge.exposeInMainWorld('lcino', {
   quitApp: () => ipcRenderer.invoke('app:quit'),
   setLoginItem: (open) => ipcRenderer.invoke('app:set-login-item', open),
   snapshotsList: () => ipcRenderer.invoke('snapshots:list'),
-  snapshotsPurge: () => ipcRenderer.invoke('snapshots:purge')
+  snapshotsPurge: () => ipcRenderer.invoke('snapshots:purge'),
+  maintenanceList: () => ipcRenderer.invoke('maintenance:list'),
+  maintenanceRun: (ids) => ipcRenderer.invoke('maintenance:run', ids),
+  downloadsScan: () => ipcRenderer.invoke('downloads:scan')
 });

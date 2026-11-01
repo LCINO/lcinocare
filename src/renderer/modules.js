@@ -115,6 +115,7 @@
         '<path d="M13.4 3.4L5.8 13.6h4.6l-.8 7 7.6-10.2h-4.7z" fill="#fff"/>'),
       rows: [
         { icon: 'speed', label: 'Speed & Memory', sub: 'Live CPU and memory usage, honest numbers', view: 'speed' },
+        { icon: 'smart', label: 'Maintenance Tasks', sub: 'Real macOS housekeeping: DNS, RAM, Spotlight, Mail', view: 'perf-manager', pane: 'maintenance' },
         { icon: 'smart', label: 'Login Items', sub: 'Apps that open when you sign in', view: 'perf-manager', pane: 'login' },
         { icon: 'tools', label: 'Background Items', sub: 'Launch agents and daemons', view: 'perf-manager', pane: 'background' }
       ]
@@ -203,7 +204,9 @@
     { icon: 'tools', label: 'Background Items', desc: 'Manage background apps and processes running on your Mac.', view: 'perf-manager', pane: 'background', color: ['#a855f7', '#6d28d9'] },
     { icon: 'mail', label: 'Mail Attachments', desc: 'Remove locally stored email attachments to free space.', view: 'cleanup-manager', pane: 'mail', color: ['#c46aff', '#7c3aed'] },
     { icon: 'trash', label: 'Trash Bins', desc: 'Empty all of the available Trash Bins on your Mac.', view: 'cleanup-manager', pane: 'trash', color: ['#a5c9ff', '#3e6fd9'] },
-    { icon: 'tm', label: 'Time Machine Snapshots', desc: 'Review and purge local Time Machine snapshots.', action: 'snapshots', color: ['#ffd35a', '#e0821a'] }
+    { icon: 'tm', label: 'Time Machine Snapshots', desc: 'Review and purge local Time Machine snapshots.', action: 'snapshots', color: ['#ffd35a', '#e0821a'] },
+    { icon: 'speed', label: 'Maintenance Tasks', desc: 'Flush DNS, free RAM, run macOS scripts, reindex Spotlight and more.', view: 'perf-manager', pane: 'maintenance', color: ['#ff6b35', '#c2410c'] },
+    { icon: 'files', label: 'Downloads', desc: 'Review and clean one-time files piling up in Downloads.', view: 'downloads-tool', color: ['#0a84ff', '#0a4fa8'] }
   ];
 
   function glyph(key, size = 18, color = '#fff') {

@@ -119,7 +119,7 @@ const MODULE_PARENT = {
   clutter: 'clutter', files: 'clutter', duplicates: 'clutter',
   spacelens: 'spacelens', bubble: 'spacelens',
   cloud: 'cloud',
-  tools: 'tools',
+  tools: 'tools', 'downloads-tool': 'tools',
   activity: 'activity', dashboard: 'activity', history: 'activity'
 };
 
@@ -138,6 +138,7 @@ const VIEWS = {
   clean: { title: 'Smart Clean', render: renderClean },
   'cleanup-manager': { title: 'Cleanup Manager', render: renderCleanupManager },
   'perf-manager': { title: 'Performance Manager', render: renderPerfManager },
+  'downloads-tool': { title: 'Downloads', render: renderDownloads, section: 'view-land-downloads' },
   bubble: { title: 'My Clutter Map', render: renderClutter, section: 'view-clutter' },
   duplicates: { title: 'Duplicates', render: renderDuplicates },
   files: { title: 'Large Files', render: renderFiles },
@@ -230,6 +231,7 @@ async function runScan2({ silent = false } = {}) {
   if (state.scanning) return;
   state.scanning = true;
   state.selectedClean.clear();
+  dl.selected.clear();
   if (!silent) setOverlay(true, 'Preparing scan…', 3);
   const { ok, reason } = await window.lcino.scan().then((r) => {
     if (r.ok) latestScanResult = r.result;
@@ -240,7 +242,7 @@ async function runScan2({ silent = false } = {}) {
   if (!ok) { toast(`Scan failed: ${reason}`, 'err'); return; }
   state.scan = latestScanResult;
   state.dupes = null;
-  if (['dashboard', 'clean', 'duplicates', 'files', 'smart', 'cleanup-manager', 'perf-manager'].includes(currentView)) showView(currentView);
+  if (['dashboard', 'clean', 'duplicates', 'files', 'smart', 'cleanup-manager', 'perf-manager', 'downloads-tool'].includes(currentView)) showView(currentView);
   toast(`Scan complete in ${(state.scan.durationMs / 1000).toFixed(0)}s — ${fmtBytes(state.scan.safeBytes)} safely cleanable`);
 }
 
@@ -1168,11 +1170,14 @@ function cmEmptyState(title) {
 
 // ── performance manager (Login Items / Background Items) ──────────────────
 
-const pm = { pane: 'login', selected: new Set() };
+const pm = { pane: 'login', selected: new Set(), maint: new Set() };
 
 async function renderPerfManager() {
   const view = $('#view-perf-manager');
   view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+
+  if (pm.pane === 'maintenance') { await renderMaintenancePane(view); return; }
+
   const data = await window.lcino.startupList();
   const loginItems = data.loginItems;
   const agents = data.agents || [];
@@ -1181,6 +1186,7 @@ async function renderPerfManager() {
     <div class="mgr-side">
       <button class="mgr-nav ${pm.pane === 'login' ? 'active' : ''}" data-pmpane="login">Login Items</button>
       <button class="mgr-nav ${pm.pane === 'background' ? 'active' : ''}" data-pmpane="background">Background Items</button>
+      <button class="mgr-nav ${pm.pane === 'maintenance' ? 'active' : ''}" data-pmpane="maintenance">Maintenance</button>
     </div>`;
 
   let contentHtml = '';
@@ -1277,6 +1283,186 @@ async function renderPerfManager() {
     else toast(`Disabled ${okCount} of ${paths.length} — the rest need manual attention`, 'err');
     renderPerfManager();
   };
+}
+
+// ── maintenance pane (real macOS tasks) ──────────────────────────────────
+
+async function renderMaintenancePane(view) {
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  const tasks = await window.lcino.maintenanceList();
+  const rows = tasks.map((t) => `
+    <div class="mgr-item maint-item">
+      <input type="checkbox" class="mt-check" data-mt="${esc(t.id)}" ${pm.maint.has(t.id) ? 'checked' : ''} />
+      <div class="mi-info">
+        <div class="mi-name">${esc(t.label)}
+          ${t.needsAdmin ? '<span class="mm-badge dim" title="macOS will ask for your password once" style="margin-left:6px">🔑 Admin</span>' : ''}
+          ${t.requiresAppQuit ? `<span class="mm-badge dim" style="margin-left:6px">Quits ${esc(t.requiresAppQuit.join(', '))}</span>` : ''}
+        </div>
+        <div class="mi-sub">${esc(t.description)}</div>
+      </div>
+    </div>`).join('');
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        <button class="mgr-nav ${pm.pane === 'login' ? 'active' : ''}" data-pmpane="login">Login Items</button>
+        <button class="mgr-nav ${pm.pane === 'background' ? 'active' : ''}" data-pmpane="background">Background Items</button>
+        <button class="mgr-nav active" data-pmpane="maintenance">Maintenance</button>
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">Maintenance Tasks</div>
+        <div class="mgr-pane-desc">Genuine macOS housekeeping, straight from the system toolbox. Tasks marked 🔑 ask for your administrator password once — the same dialog an installer shows. Nothing runs without you ticking it.</div>
+        ${rows}
+        <div class="mgr-bar">
+          <div class="mb-info" id="mt-info">${pm.maint.size ? `${pm.maint.size} task${pm.maint.size > 1 ? 's' : ''} selected` : 'No Tasks Selected'}</div>
+          <div class="mb-spacer"></div>
+          <button class="mgr-done" id="mt-run" ${pm.maint.size ? '' : 'disabled'}>Run Tasks</button>
+        </div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.mt-check').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) pm.maint.add(cb.dataset.mt);
+    else pm.maint.delete(cb.dataset.mt);
+    const info = view.querySelector('#mt-info');
+    info.textContent = pm.maint.size ? `${pm.maint.size} task${pm.maint.size > 1 ? 's' : ''} selected` : 'No Tasks Selected';
+    $('#mt-run').disabled = !pm.maint.size;
+  }));
+  view.querySelectorAll('[data-pmpane]').forEach((b) => b.onclick = () => { pm.pane = b.dataset.pmpane; renderPerfManager(); });
+  $('#mt-run').onclick = () => runMaintenance([...pm.maint]);
+}
+
+async function runMaintenance(ids) {
+  if (!ids.length) return;
+  // Mail task quits Mail — check first, same courtesy as cleanup
+  const tasks = await window.lcino.maintenanceList();
+  const quitApps = [...new Set(tasks.filter((t) => ids.includes(t.id) && t.requiresAppQuit).flatMap((t) => t.requiresAppQuit))];
+  const proceed = async () => {
+    setOverlay(true, 'Running maintenance tasks…', 10);
+    const { results } = await window.lcino.maintenanceRun(ids);
+    setOverlay(false);
+    const ok = results.filter((r) => r.ok);
+    const failed = results.filter((r) => !r.ok);
+    showModal({
+      title: 'Maintenance report',
+      bodyHtml: `${ok.map((r) => `<div class="mt-line ok">✓ <b>${esc(r.label)}</b> — ${esc(r.detail || 'Completed.')}</div>`).join('')}
+        ${failed.map((r) => `<div class="mt-line err">✕ <b>${esc(r.label)}</b> — ${esc(r.reason)}</div>`).join('')}`,
+      confirmText: 'Done',
+      onConfirm: async () => { pm.maint.clear(); renderPerfManager(); }
+    });
+  };
+  if (quitApps.length) {
+    const running = await window.lcino.appRunning(quitApps);
+    if (running.length) {
+      showModal({
+        title: 'An app needs to quit first',
+        bodyHtml: `<b>${esc(running.map((r) => r.display || r.name).join(', '))}</b> is holding files that maintenance needs. Quit it gracefully and continue?`,
+        confirmText: 'Quit & Continue',
+        onConfirm: async () => {
+          await window.lcino.quitApps(running.flatMap((r) => r.pids));
+          for (let i = 0; i < 6; i++) { await sleep(1000); if (!(await window.lcino.appRunning(quitApps)).length) break; }
+          proceed();
+        }
+      });
+      return;
+    }
+  }
+  proceed();
+}
+
+// ── downloads tool ───────────────────────────────────────────────────────
+
+const dl = { sort: 'size', items: null, selected: new Set() };
+
+function renderDownloads() {
+  const view = $('#view-land-downloads');
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  if (dl.items === null) { refreshDownloads(); return; }
+
+  const items = [...dl.items].sort(dl.sort === 'size'
+    ? (a, b) => b.sizeBytes - a.sizeBytes
+    : (a, b) => b.mtimeMs - a.mtimeMs);
+  const kindColor = { installer: '#bf5af2', video: '#ff453a', audio: '#30d158', image: '#0a84ff', document: '#ff9f0a', code: '#22b8cf', other: '#8e8e93' };
+  const sel = items.filter((i) => dl.selected.has(i.path));
+  const selBytes = sel.reduce((s, i) => s + (i.sizeBytes || 0), 0);
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        <button class="mgr-nav active">Downloads</button>
+        <button class="mgr-nav" data-dl-view="files">Large Files</button>
+        <button class="mgr-nav" data-dl-view="duplicates">Duplicates</button>
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">Downloads</div>
+        <div class="mgr-pane-desc">Everything in your Downloads folder, oldest habits first. Select the one-time files and send them to the Trash — recoverable, as always.</div>
+        <div class="mgr-controls">
+          <button class="mgr-select" id="dl-select">Select: <b>${dl.selected.size ? 'Selected' : 'None'}</b> <svg width="10" height="7" viewBox="0 0 10 7" style="color:var(--mgr-accent)"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <div class="mgr-menu hidden" id="dl-select-menu">
+            <button data-dlopt="none">None</button>
+            <button data-dlopt="all">All</button>
+            <button data-dlopt="installers">All installers</button>
+          </div>
+          <button class="mgr-select" id="dl-sort">Sort by: <b>${dl.sort === 'size' ? 'Size' : 'Date'}</b> <svg width="10" height="7" viewBox="0 0 10 7" style="color:var(--mgr-accent)"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button class="mgr-select" id="dl-rescan">↻ Rescan</button>
+        </div>
+        ${items.length ? items.map((i) => `
+          <div class="mgr-item">
+            <input type="checkbox" class="dl-check" data-path="${esc(i.path)}" ${dl.selected.has(i.path) ? 'checked' : ''} />
+            ${mgrTile(i.label, kindColor[i.kind] || '#8e8e93')}
+            <div class="mi-info">
+              <div class="mi-name">${esc(i.label)}</div>
+              <div class="mi-sub">${esc(tilt(i.path))}</div>
+            </div>
+            <button class="mi-sparkle" data-reveal="${esc(i.path)}" title="Show in Finder">${Icons.glyph('folder', 15, 'currentColor')}</button>
+            <div class="mi-size">${fmtBytes(i.sizeBytes)}</div>
+          </div>`).join('')
+        : '<div class="mgr-empty"><div class="me-title">Downloads is tidy</div><div class="me-sub">No files over 256 KB to review. Everything is in order.</div></div>'}
+        <div class="mgr-bar">
+          <div class="mb-info">${sel.length ? `${sel.length} Item${sel.length > 1 ? 's' : ''} Selected <span>|</span> ${fmtBytes(selBytes)}` : 'No Items Selected'}</div>
+          <div class="mb-spacer"></div>
+          <button class="mgr-done" id="dl-clean" ${sel.length ? '' : 'disabled'}>Move to Trash</button>
+        </div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.dl-check').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) dl.selected.add(cb.dataset.path);
+    else dl.selected.delete(cb.dataset.path);
+    const s2 = items.filter((i) => dl.selected.has(i.path));
+    view.querySelector('.mb-info').innerHTML = s2.length
+      ? `${s2.length} Item${s2.length > 1 ? 's' : ''} Selected <span>|</span> ${fmtBytes(s2.reduce((s, i) => s + (i.sizeBytes || 0), 0))}`
+      : 'No Items Selected';
+    $('#dl-clean').disabled = !s2.length;
+  }));
+  view.querySelectorAll('[data-reveal]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); window.lcino.reveal(b.dataset.reveal); });
+  view.querySelectorAll('[data-dl-view]').forEach((b) => b.onclick = () => showView(b.dataset.dlView));
+  $('#dl-sort').onclick = () => { dl.sort = dl.sort === 'size' ? 'date' : 'size'; renderDownloads(); };
+  $('#dl-rescan').onclick = () => refreshDownloads();
+  const selBtn = $('#dl-select');
+  const menu = $('#dl-select-menu');
+  selBtn.onclick = (e) => { e.stopPropagation(); menu.classList.toggle('hidden'); };
+  menu.querySelectorAll('[data-dlopt]').forEach((o) => o.onclick = () => {
+    const opt = o.dataset.dlopt;
+    dl.selected.clear();
+    if (opt === 'all') items.forEach((i) => dl.selected.add(i.path));
+    if (opt === 'installers') items.filter((i) => i.kind === 'installer').forEach((i) => dl.selected.add(i.path));
+    renderDownloads();
+  });
+  $('#dl-clean').onclick = () => {
+    const chosen = items.filter((i) => dl.selected.has(i.path)).map((i) => ({ id: i.id, path: i.path, sizeBytes: i.sizeBytes }));
+    // showTrashConfirm handles the whole chain: confirm → clean → rescan → empty-trash offer
+    showTrashConfirm(chosen);
+  };
+}
+
+async function refreshDownloads() {
+  const view = $('#view-land-downloads');
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  const r = await window.lcino.downloadsScan();
+  dl.items = r.ok ? r.items : [];
+  dl.selected.clear();
+  renderDownloads();
 }
 
 // ── my clutter (bubble map) ───────────────────────────────────────────────
