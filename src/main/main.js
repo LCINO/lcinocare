@@ -2,7 +2,7 @@
 
 // LcinoCare — main process: window lifecycle, IPC wiring, single-flight scan.
 
-const { app, BrowserWindow, Menu, ipcMain, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, nativeTheme, dialog } = require('electron');
 const path = require('path');
 
 const scanner = require('./scanner');
@@ -24,6 +24,7 @@ app.setName('LcinoCare');
 
 let win = null;
 let scanning = false;
+const HOME_PATH = require('os').homedir();
 let lastScan = null;
 let appsCache = null;
 
@@ -208,7 +209,18 @@ function wireIpc() {
 
   ipcMain.handle('protected:list', () => require('./rules').PROTECTED);
 
-  ipcMain.handle('home:overview', () => scanner.homeOverview(emitProgress));
+  ipcMain.handle('home:overview', (_e, root) => {
+    if (root && root !== HOME_PATH) {
+      const oneFs = root === '/';
+      return scanner.overview(root, emitProgress, { oneFilesystem: oneFs });
+    }
+    return scanner.homeOverview(emitProgress);
+  });
+  ipcMain.handle('volumes:list', () => scanner.listLocations());
+  ipcMain.handle('dialog:choose-folder', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+    return r.canceled ? null : r.filePaths[0];
+  });
 
   ipcMain.handle('startup:list', () => startup.listStartup());
   ipcMain.handle('startup:disable', (_e, { path: p, disabled }) => startup.setAgentDisabled(p, disabled));

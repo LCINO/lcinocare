@@ -172,12 +172,12 @@
       art: () => art('#4f9ef0', '#1d5fa8', '#0c2f58', wave(),
         '<path d="M7.4 18a3.9 3.9 0 0 1-.6-7.8A5.2 5.2 0 0 1 17 8.6 3.7 3.7 0 0 1 16.6 18z" fill="#fff"/>'),
       rows: [
-        { icon: 'cloud', label: 'Connect iCloud', action: 'cloud-later' },
+        { icon: 'cloud', label: 'Scan iCloud Drive', sub: 'Your synced iCloud files, mapped live', view: 'bubble', icloud: true },
         { icon: 'cloud', label: 'Connect Google Drive', action: 'cloud-later' },
         { icon: 'cloud', label: 'Connect OneDrive', action: 'cloud-later' },
         { icon: 'cloud', label: 'Connect Dropbox', action: 'cloud-later' }
       ],
-      footnote: 'Cloud connectors arrive in a later update — nothing is connected yet, and LcinoCare will say so clearly when you click.'
+      footnote: 'iCloud Drive is scanned locally through Space Lens — no account needed. Google Drive, OneDrive and Dropbox connectors arrive in a later update.'
     },
     {
       id: 'tools',

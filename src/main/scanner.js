@@ -18,9 +18,10 @@ const expandHome = (p) => (p.startsWith('~') ? path.join(HOME, p.slice(1)) : p);
 
 // ── du sizing ─────────────────────────────────────────────────────────────
 
-function duK(pathArg, { fullListing = false, timeoutMs = 180000 } = {}) {
+function duK(pathArg, { fullListing = false, timeoutMs = 180000, oneFilesystem = false } = {}) {
   return new Promise((resolve) => {
     const args = ['-k'];
+    if (oneFilesystem) args.push('-x');
     if (fullListing) args.push('-a');
     args.push(pathArg);
     const child = spawn(DU, args, { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -36,8 +37,8 @@ function duK(pathArg, { fullListing = false, timeoutMs = 180000 } = {}) {
   });
 }
 
-async function duSize(p) {
-  const out = await duK(p);
+async function duSize(p, { oneFilesystem = false } = {}) {
+  const out = await duK(p, { oneFilesystem });
   if (!out) return null;
   const m = out.match(/^(\d+)\t/);
   return m ? parseInt(m[1], 10) * 1024 : null;
@@ -452,18 +453,19 @@ function shorten(p) {
 // Emits a 'home-overview' progress event per completed entry so the renderer
 // can draw the bubble map progressively while measuring continues.
 
-async function homeOverview(emit = () => {}) {
+async function overview(root, emit = () => {}) {
   const entries = [];
   let names;
   try {
-    names = await fsp.readdir(HOME, { withFileTypes: true });
+    names = await fsp.readdir(root, { withFileTypes: true });
   } catch {
     return [];
   }
   const jobs = [];
   for (const e of names) {
     if (e.name.startsWith('.')) continue;
-    const full = path.join(HOME, e.name);
+    if (root === '/' && ['System', 'Volumes', 'dev', 'home'].includes(e.name)) continue; // sealed system / mounts
+    const full = path.join(root, e.name);
     if (e.isDirectory() && !e.isSymbolicLink()) {
       jobs.push(async () => {
         emit({ stage: 'home-overview', detail: `Measuring ${shorten(full)}…` });
@@ -490,7 +492,28 @@ async function homeOverview(emit = () => {}) {
   return entries;
 }
 
-module.exports = { scan, duSize, diskUsage, findDuplicateBundles, homeOverview, formatGB, shorten };
+async function homeOverview(emit = () => {}) {
+  return overview(HOME, emit);
+}
+
+// Locations offered in the Space Lens selector.
+function listLocations() {
+  const locs = [
+    { id: 'home', name: 'Home Folder', path: HOME },
+    { id: 'mac', name: 'Macintosh HD', path: '/', fullDisk: true }
+  ];
+  const icloud = path.join(HOME, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  if (fs.existsSync(icloud)) locs.push({ id: 'icloud', name: 'iCloud Drive', path: icloud });
+  try {
+    for (const v of fs.readdirSync('/Volumes')) {
+      if (/Macintosh HD/i.test(v)) continue;
+      const p = path.join('/Volumes', v);
+      try { if (fs.statSync(p).isDirectory()) locs.push({ id: 'vol-' + v, name: v, path: p }); } catch { /* unreadable */ }
+    }
+  } catch { /* no /Volumes */ }
+  return locs;
+}
+module.exports = { scan, duSize, diskUsage, findDuplicateBundles, homeOverview, overview, listLocations, formatGB, shorten };
 
 // ── CLI mode: npm run scan ────────────────────────────────────────────────
 

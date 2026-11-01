@@ -213,7 +213,13 @@ window.lcino = {
   ]),
   appMeta: (p) => Promise.resolve({ icon: null, version: '4.2.1', addedMs: Date.now() - 90 * 86400000 }),
   appSize: (p) => Promise.resolve(Math.round((0.2 + (p.length % 30) / 10) * 1024 * 1024 * 1024)),
-  homeOverview: () => Promise.resolve([
+  listLocations: () => Promise.resolve([
+    { id: 'home', name: 'Home Folder', path: '/Users/anamdev' },
+    { id: 'mac', name: 'Macintosh HD', path: '/', fullDisk: true },
+    { id: 'icloud', name: 'iCloud Drive', path: '/Users/anamdev/Library/Mobile Documents/com~apple~CloudDocs' }
+  ]),
+  chooseFolder: () => Promise.resolve(null),
+  homeOverview: (root) => Promise.resolve([
     { name: 'Library', path: '/Users/anamdev/Library', sizeBytes: 52 * GB, isDir: true },
     { name: 'LCINO', path: '/Users/anamdev/LCINO', sizeBytes: 9.7 * GB, isDir: true },
     { name: 'Desktop', path: '/Users/anamdev/Desktop', sizeBytes: 5.1 * GB, isDir: true },

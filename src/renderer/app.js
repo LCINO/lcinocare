@@ -821,10 +821,20 @@ function wireLanding(view, mod, onScan) {
   const runScan = onScan || defaultLandingScan(mod);
   view.querySelectorAll('[data-ml-row]').forEach((btn) => {
     const r = mod.rows[Number(btn.dataset.mlRow)];
-    btn.onclick = () => {
+    btn.onclick = async () => {
       if (r.action === 'scan') { runScan(); return; }
       if (r.action === 'cloud-later') {
         toast(`${r.label.replace('Connect ', '')} connector arrives in a later update — nothing is connected yet.`);
+        return;
+      }
+      if (r.icloud) {
+        const locs = await window.lcino.listLocations().catch(() => []);
+        const ic = locs.find((l) => l.id === 'icloud');
+        if (!ic) { toast('iCloud Drive is not set up on this Mac.'); return; }
+        sl.root = ic.path;
+        sl.name = 'iCloud Drive';
+        clutterCache = null;
+        showView('bubble');
         return;
       }
       openView(r.view, r.pane);
@@ -1667,6 +1677,7 @@ async function runSimilarScan() {
 // ── my clutter (bubble map) ───────────────────────────────────────────────
 
 let clutterCache = null;
+const sl = { root: null, name: 'Home Folder' }; // Space Lens location (null = home)
 let clutterPartial = [];
 
 // Greedy golden-angle spiral packing — organic, no overlaps, area-proportional.
@@ -1696,6 +1707,42 @@ function packBubbles(items, box) {
   return placed;
 }
 
+
+// Space Lens location selector (Home / Macintosh HD / iCloud Drive / volumes / Choose Folder…)
+async function wireClutterLocation(view) {
+  const btn = view.querySelector('#clutter-loc');
+  if (!btn) return;
+  const locs = await window.lcino.listLocations().catch(() => []);
+  let menu = view.querySelector('#clutter-loc-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.className = 'mgr-menu hidden';
+    menu.id = 'clutter-loc-menu';
+    btn.parentElement.style.position = 'relative';
+    btn.parentElement.appendChild(menu);
+  }
+  menu.innerHTML = `
+    ${locs.map((l) => `<button data-loc="${esc(l.path)}" data-name="${esc(l.name)}">${esc(l.name)}${l.fullDisk ? ' (full disk)' : ''}</button>`).join('')}
+    <button data-loc="choose">Choose Folder…</button>`;
+  btn.onclick = (e) => { e.stopPropagation(); menu.classList.toggle('hidden'); };
+  menu.querySelectorAll('[data-loc]').forEach((o) => o.onclick = async () => {
+    menu.classList.add('hidden');
+    if (o.dataset.loc === 'choose') {
+      const picked = await window.lcino.chooseFolder();
+      if (!picked) return;
+      sl.root = picked;
+      sl.name = picked.split('/').pop() || picked;
+    } else {
+      sl.root = o.dataset.loc === locs[0]?.path ? null : o.dataset.loc; // home uses the default engine path
+      sl.name = o.dataset.name;
+    }
+    clutterCache = null;
+    renderClutter();
+  });
+  document.addEventListener('click', (e) => {
+    if (!menu.contains(e.target) && e.target !== btn) menu.classList.add('hidden');
+  }, { once: true });
+}
 async function renderClutter() {
   const view = $('#view-clutter');
 
@@ -1725,6 +1772,12 @@ async function renderClutter() {
           <span class="mini-spinner"></span>&nbsp; ${esc(detail || 'Measuring…')}
         </span>
       </div>` : '';
+    const emptyNote = (!partial && !entries.length) ? `
+      <div class="mgr-note" style="position:absolute;left:10%;right:10%;bottom:20px;text-align:center">
+        Nothing measurable here — the folder may be empty, or macOS is guarding it.
+        For protected locations (iCloud Drive, other Library areas) grant LcinoCare's host app
+        <b>Full Disk Access</b> in System Settings → Privacy &amp; Security.
+      </div>` : '';
     const residentsCard = partial ? '' : `
       <div class="card" style="margin-top:14px">
         <h3>Biggest residents</h3>
@@ -1739,12 +1792,16 @@ async function renderClutter() {
       </div>`;
     view.innerHTML = `
       <div class="section-head">
-        <h2>My Clutter — what's eating your home folder</h2>
-        <div class="actions"><button class="btn small" id="clutter-rescan">↻ Remap</button></div>
+        <h2>My Clutter — what's eating <span id="clutter-loc-name">${esc(sl.name)}</span></h2>
+        <div class="actions">
+          <button class="mgr-select" id="clutter-loc" style="border:1px solid var(--card-border);border-radius:9px">📁 <b>${esc(sl.name)}</b> <svg width="10" height="7" viewBox="0 0 10 7" style="color:var(--acc)"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button class="btn small" id="clutter-rescan">↻ Remap</button>
+        </div>
       </div>
-      <div class="clutter-stage" id="clutter-stage">${svg}${progressLine}</div>
+      <div class="clutter-stage" id="clutter-stage">${svg}${progressLine}${emptyNote}</div>
       ${residentsCard}`;
     $('#clutter-rescan').onclick = () => { clutterCache = null; renderClutter(); };
+    wireClutterLocation(view);
     view.querySelectorAll('[data-reveal]').forEach((b) => b.onclick = () => window.lcino.reveal(b.dataset.reveal));
     const stage = $('#clutter-stage');
     stage.querySelectorAll('.bubble').forEach((g) => {
@@ -1777,8 +1834,11 @@ async function renderClutter() {
   clutterPartial = [];
   view.innerHTML = `
     <div class="section-head">
-      <h2>My Clutter — what's eating your home folder</h2>
-      <div class="actions"><button class="btn small" id="clutter-rescan">↻ Remap</button></div>
+      <h2>My Clutter — what's eating <span id="clutter-loc-name">${esc(sl.name)}</span></h2>
+      <div class="actions">
+        <button class="mgr-select" id="clutter-loc" style="border:1px solid var(--card-border);border-radius:9px">📁 <b>${esc(sl.name)}</b> <svg width="10" height="7" viewBox="0 0 10 7" style="color:var(--acc)"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+        <button class="btn small" id="clutter-rescan">↻ Remap</button>
+      </div>
     </div>
     <div class="clutter-stage" id="clutter-stage">
       <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
@@ -1787,6 +1847,7 @@ async function renderClutter() {
       </div>
     </div>`;
   $('#clutter-rescan').onclick = () => { clutterCache = null; renderClutter(); };
+  wireClutterLocation(view);
 
   const off = window.lcino.onOverviewProgress((ev) => {
     if (currentView !== 'bubble') return;
@@ -1803,9 +1864,9 @@ async function renderClutter() {
     }
   });
 
-  const entries = await window.lcino.homeOverview();
+  const entries = sl.root ? await window.lcino.homeOverview(sl.root) : await window.lcino.homeOverview();
   off();
-  clutterCache = entries;
+  if (!sl.root) clutterCache = entries; else clutterCache = null; // cache only the home map
   if (currentView === 'bubble') drawMap(entries);
 }
 
