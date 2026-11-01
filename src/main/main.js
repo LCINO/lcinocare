@@ -20,9 +20,19 @@ const updates = require('./updates');
 const privacy = require('./privacy');
 const similar = require('./similar');
 const menuBar = require('./menu');
+const schedule = require('./schedule');
 const { cmpVersion } = require('./updates');
 
 app.setName('LcinoCare');
+
+// Single instance: a second launch hands off to the running one. The
+// --background-scan flag (scheduled scan via launchd) is forwarded along.
+const gotLock = app.requestSingleInstanceLock();
+const bgScanArgv = process.argv.includes('--background-scan');
+if (!gotLock) {
+  if (bgScanArgv) { /* the running instance will scan */ }
+  app.quit();
+}
 
 let win = null;
 let scanning = false;
@@ -166,6 +176,35 @@ async function githubUpdateCheck() {
 }
 
 
+// ── scheduled background scan ─────────────────────────────────────────────
+
+let bgQuitTimer = null;
+
+function runBackgroundScan() {
+  if (scanning) return;
+  scanning = true;
+  const finish = (summary) => {
+    scanning = false;
+    try { new Notification(summary).show(); } catch { /* notifications blocked */ }
+    // a background scan process has nothing left to do — leave shortly so a
+    // notification click can still surface the app
+    bgQuitTimer = setTimeout(() => { if (!win || win.isDestroyed()) app.quit(); }, 15000);
+  };
+  try {
+    scanner.scan(() => {}).then((result) => {
+      const gb = result.safeBytes / 1073741824;
+      finish({
+        title: 'LcinoCare — scheduled scan done',
+        body: gb >= 0.5
+          ? `${gb.toFixed(1)} GB of junk found. Click to review and clean it up.`
+          : `All tidy — only ${(result.safeBytes / 1048576).toFixed(0)} MB of safely cleanable junk.`
+      });
+    }).catch((e) => finish({ title: 'LcinoCare — scan failed', body: String(e).slice(0, 120) }));
+  } catch (e) {
+    finish({ title: 'LcinoCare — scan failed', body: String(e).slice(0, 120) });
+  }
+}
+
 function wireIpc() {
   ipcMain.handle('scan:run', () => runScan());
 
@@ -287,6 +326,8 @@ function wireIpc() {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
+  ipcMain.handle('schedule:get', () => schedule.status());
+  ipcMain.handle('schedule:set', (_e, { schedule, hour }) => schedule.set(schedule, hour));
 
   ipcMain.handle('startup:list', () => startup.listStartup());
   ipcMain.handle('startup:disable', (_e, { path: p, disabled }) => startup.setAgentDisabled(p, disabled));
@@ -419,10 +460,22 @@ function wireIpc() {
 }
 
 app.whenReady().then(() => {
+  autoUpdaterRef = setupAutoUpdater();
+
+  app.on('second-instance', (_e, argv) => {
+    if (argv.includes('--background-scan')) runBackgroundScan();
+    else if (win && !win.isDestroyed()) { win.show(); win.focus(); }
+  });
+
+  // Scheduled run via launchd: no window, no tray — scan, notify, and leave.
+  if (bgScanArgv) {
+    runBackgroundScan();
+    return;
+  }
+
   menu();
   wireIpc();
   createWindow();
-  autoUpdaterRef = setupAutoUpdater();
   menuBar.createMenu({
     showMain: () => {
       if (!win || win.isDestroyed()) createWindow();

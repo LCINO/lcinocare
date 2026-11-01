@@ -281,6 +281,8 @@ window.lcino = {
     ],
     updates: 1, withFeed: 2, noFeed: 1
   }),
+  scheduleGet: () => Promise.resolve({ enabled: false, schedule: 'off', hour: 10 }),
+  scheduleSet: (cfg) => Promise.resolve({ ok: true, enabled: cfg.schedule !== 'off', schedule: cfg.schedule, hour: cfg.hour }),
   privacyScan: () => Promise.resolve({
     ok: true,
     browsers: [

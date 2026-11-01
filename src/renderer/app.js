@@ -954,6 +954,31 @@ async function renderActivity() {
           <button class="act-go" data-act-go="tools">Open My Tools</button>
         </div>
       </div>
+
+      <div class="act-card act-schedule">
+        <div class="as-head">
+          <span class="act-cta-ico" style="background:linear-gradient(145deg,#ffd35a,#e0821a)">${MODS.glyph('tm', 20, '#fff')}</span>
+          <div>
+            <div class="as-title">Care Schedule</div>
+            <div class="as-sub">A quiet background scan on a schedule — you get a notification when junk is found. Nothing is cleaned without you.</div>
+          </div>
+        </div>
+        <div class="as-controls">
+          <label>Frequency
+            <select id="as-freq">
+              <option value="off">Off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          <label>At
+            <select id="as-hour">
+              ${[8, 10, 13, 18, 21].map((h) => `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`).join('')}
+            </select>
+          </label>
+          <span class="as-state" id="as-state"></span>
+        </div>
+      </div>
       <div class="act-recent">
         <div class="act-recent-head">
           <h3>Recent activity</h3>
@@ -973,6 +998,29 @@ async function renderActivity() {
     </div>`;
 
   view.querySelectorAll('[data-act-go]').forEach((b) => b.onclick = () => showView(b.dataset.actGo));
+
+  // care schedule
+  const sched = await window.lcino.scheduleGet().catch(() => ({ enabled: false, schedule: 'off', hour: 10 }));
+  const freq = view.querySelector('#as-freq');
+  const hour = view.querySelector('#as-hour');
+  const stateEl = view.querySelector('#as-state');
+  freq.value = sched.schedule === 'weekly' ? 'weekly' : sched.schedule === 'daily' ? 'daily' : 'off';
+  hour.value = String(sched.hour || 10);
+  hour.parentElement.style.display = sched.schedule === 'off' ? 'none' : '';
+  const syncState = () => {
+    stateEl.textContent = freq.value === 'off' ? 'Schedule is off' : `Scans ${freq.value} at ${String(hour.value).padStart(2, '0')}:00`;
+  };
+  syncState();
+  freq.onchange = () => { hour.parentElement.style.display = freq.value === 'off' ? 'none' : ''; syncState(); };
+  hour.onchange = syncState;
+  freq.parentElement.parentElement.querySelectorAll('select').forEach((sel) => sel.addEventListener('change', async () => {
+    const cfg = { schedule: freq.value, hour: parseInt(hour.value, 10) };
+    stateEl.textContent = 'Saving…';
+    const r = await window.lcino.scheduleSet(cfg).catch(() => null);
+    stateEl.textContent = r && r.ok
+      ? (cfg.schedule === 'off' ? 'Schedule is off' : `Saved — scans ${cfg.schedule} at ${String(cfg.hour).padStart(2, '0')}:00 ✓`)
+      : 'Could not save — check that LcinoCare can write to your LaunchAgents folder';
+  }));
 }
 
 // ── cleanup manager (System Junk / Mail Attachments / Trash Bins) ─────────

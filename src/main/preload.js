@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('lcino', {
   updateInstall: () => ipcRenderer.invoke('update:install'),
   onUpdateEvent: (cb) => ipcRenderer.on('lcino:update-event', (_e, ev) => cb(ev)),
   onCheckUpdates: (cb) => ipcRenderer.on('lcino:check-updates', () => cb()),
+  scheduleGet: () => ipcRenderer.invoke('schedule:get'),
+  scheduleSet: (cfg) => ipcRenderer.invoke('schedule:set', cfg),
   menuSnapshot: () => ipcRenderer.invoke('menu:snapshot'),
   menuQuickClean: () => ipcRenderer.invoke('menu:quick-clean'),
   appShow: () => ipcRenderer.invoke('app:show'),
