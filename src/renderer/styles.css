@@ -124,8 +124,9 @@ body {
 }
 
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 20px; }
-.brand-mark { filter: drop-shadow(0 4px 10px rgba(10, 168, 143, 0.35)); }
+.brand-mark { filter: drop-shadow(0 4px 10px rgba(242, 47, 192, 0.35)); }
 .brand-name { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
+.brand-name b { color: #f22fc0; }
 .brand-slogan { font-size: 10.5px; color: var(--text-3); margin-top: 1px; }
 
 #nav { display: flex; flex-direction: column; gap: 2px; }

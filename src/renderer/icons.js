@@ -65,21 +65,22 @@ function hexA(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// Brand logo mark (heart + pulse) with its own gradient.
+// Brand logo mark — MacBook frame with therapy pulse, magenta gradient.
+// Matches the landing page (care.lcino.com) branding 1:1.
 function brandLogo(size = 30) {
   const uid = `brand${icoSeq++}`;
   return `
   <svg class="brand-mark" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">
     <defs>
-      <linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#2fd4b5"/><stop offset="1" stop-color="#0a8f8f"/>
+      <linearGradient id="${uid}" x1="4.2" y1="3.2" x2="19.8" y2="14.4" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#f22fc0"/><stop offset="1" stop-color="#8d0670"/>
       </linearGradient>
     </defs>
-    <path d="M12 21C7 16.6 3 13.3 3 9.3 3 6.4 5.2 4 8 4c1.6 0 3.1.8 4 2.1C12.9 4.8 14.4 4 16 4c2.8 0 5 2.4 5 5.3 0 4-4 7.3-9 11.7z"
-          fill="url(#${uid})"/>
-    <path d="M5.5 12h3l1.5-3 2.5 5.5L14.5 10l1 2h3" fill="none" stroke="#fff" stroke-width="1.6"
-          stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
-    <ellipse cx="9" cy="7.2" rx="3.4" ry="1.8" fill="rgba(255,255,255,.35)" transform="rotate(-18 9 7.2)"/>
+    <rect x="4.2" y="3.2" width="15.6" height="11.2" rx="1.8" fill="url(#${uid})"/>
+    <path d="M6.8 9.6h2.2l1.1-2 1.8 4.2 1.3-2.7.9 1.2h2.3" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="8.6" cy="5.5" rx="4" ry="1.3" fill="rgba(255,255,255,.35)" transform="rotate(-10 8.6 5.5)"/>
+    <path d="M3.4 15.2h17.2l.9 1.5a1.5 1.5 0 0 1-1.4 2.1H3.9a1.5 1.5 0 0 1-1.4-2.1z" fill="#8d0670"/>
+    <rect x="10" y="15.9" width="4" height=".85" rx=".42" fill="#5c0146"/>
   </svg>`;
 }
 
