@@ -858,3 +858,25 @@ table.tbl tbody tr:hover { background: var(--row-hover); }
 .tool-star:hover { background: rgba(255, 255, 255, 0.12); transform: scale(1.15); }
 .tool-star.on { color: #ffd60a; }
 .tool-empty { padding: 30px; text-align: center; font-size: 13.5px; color: rgba(255,255,255,.55); }
+
+/* ── working pill (non-blocking in-page progress) ───────────────────────── */
+
+#working-pill {
+  position: fixed;
+  left: 50%; bottom: 22px;
+  transform: translate(-50%, 80px);
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: #fff;
+  background: rgba(22, 9, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 40px rgba(4, 0, 14, 0.55);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: transform .3s cubic-bezier(.3,.9,.4,1), opacity .3s ease;
+  z-index: 150;
+  pointer-events: none;
+}
+#working-pill.visible { transform: translate(-50%, 0); opacity: 1; }
+#working-pill .mini-spinner { border-color: rgba(255,255,255,.25); border-top-color: #f22fc0; width: 14px; height: 14px; }

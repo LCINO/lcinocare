@@ -14,6 +14,15 @@ const { GROUPS, RULES } = require('./rules');
 const HOME = os.homedir();
 const DU = '/usr/bin/du';
 
+// Cancellation: Stop buttons set the flag; running du children are killed so
+// the scan returns quickly with whatever it measured so far.
+let scanAbort = false;
+const activeChildren = new Set();
+function cancelScan() {
+  scanAbort = true;
+  for (const c of activeChildren) { try { c.kill('SIGKILL'); } catch { /* already gone */ } }
+}
+
 const expandHome = (p) => (p.startsWith('~') ? path.join(HOME, p.slice(1)) : p);
 
 // ── du sizing ─────────────────────────────────────────────────────────────
@@ -25,11 +34,13 @@ function duK(pathArg, { fullListing = false, timeoutMs = 180000, oneFilesystem =
     if (fullListing) args.push('-a');
     args.push(pathArg);
     const child = spawn(DU, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    activeChildren.add(child);
     let out = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
     child.stdout.on('data', (d) => (out += d));
-    child.on('error', () => { clearTimeout(timer); resolve(null); });
+    child.on('error', () => { activeChildren.delete(child); clearTimeout(timer); resolve(null); });
     child.on('close', (code) => {
+      activeChildren.delete(child);
       clearTimeout(timer);
       if (code !== 0 && !out) return resolve(null);
       resolve(out);
@@ -267,6 +278,7 @@ function makeItem(rule, p, sizeBytes) {
 }
 
 async function scan(emit = () => {}) {
+  scanAbort = false;
   const t0 = Date.now();
   const disk = await diskUsage();
 
@@ -275,6 +287,7 @@ async function scan(emit = () => {}) {
   // 1) Rule-based items.
   const expanded = []; // {rule, path}
   for (const rule of RULES) {
+    if (scanAbort) { scanAbort = false; return measureAndAssemble([], disk, emit, t0, true); }
     for (const p of rule.paths) {
       const hits = await expandPath(p);
       for (const h of hits) expanded.push({ rule, path: h });
@@ -283,7 +296,8 @@ async function scan(emit = () => {}) {
   return measureAndAssemble(expanded, disk, emit, t0);
 }
 
-async function measureAndAssemble(expanded, disk, emit, t0) {
+async function measureAndAssemble(expanded, disk, emit, t0, cancelledIn = false) {
+  const cancelled = () => cancelledIn || scanAbort;
   emit({ stage: 'sizes', detail: 'Sizing locations…' });
   const results = [];
   const jobs = expanded.map(({ rule, path: p }) => async () => {
@@ -302,6 +316,8 @@ async function measureAndAssemble(expanded, disk, emit, t0) {
     }
   });
   await Promise.all(workers);
+
+  if (cancelled()) { scanAbort = false; return assembleResult(byGroup, [], [], null, disk, emit, t0, true, false); }
 
   let fdaBlocked = false;
   const byGroup = new Map();
@@ -351,6 +367,8 @@ async function measureAndAssemble(expanded, disk, emit, t0) {
     }
   } catch { /* Application Support unreadable */ }
 
+  if (cancelled()) { scanAbort = false; return assembleResult(byGroup, [], [], null, disk, emit, t0, true, false); }
+
   // 3) Duplicate runtime bundles inside the big folders.
   emit({ stage: 'duplicates', detail: 'Detecting duplicate copies…' });
   const dupBundles = await findDuplicateBundles(bigChildren, (parentName, count, bytes) => {
@@ -377,6 +395,8 @@ async function measureAndAssemble(expanded, disk, emit, t0) {
     }
   }
 
+  if (cancelled()) { scanAbort = false; return assembleResult(byGroup, [], [], null, disk, emit, t0, true, false); }
+
   // 4) node_modules discovery (never list our own project's dependencies).
   emit({ stage: 'nodemodules', detail: 'Finding node_modules folders…' });
   const ownDir = path.resolve(__dirname, '..', '..');
@@ -386,15 +406,23 @@ async function measureAndAssemble(expanded, disk, emit, t0) {
   await pool(nmJobs, 6);
   nodeModules.sort((a, b) => b.sizeBytes - a.sizeBytes);
 
+  if (cancelled()) { scanAbort = false; return assembleResult(byGroup, nodeModules, [], null, disk, emit, t0, true, false); }
+
   // 5) Large files.
   emit({ stage: 'largefiles', detail: 'Finding large files…' });
   const largeThresholdMB = 10;
   const largeFiles = await findLargeFiles(largeThresholdMB * 1024 * 1024, () => {});
 
+  if (cancelled()) { scanAbort = false; return assembleResult(byGroup, nodeModules, largeFiles, null, disk, emit, t0, true, false); }
+
   // 6) Trash.
   emit({ stage: 'trash', detail: 'Measuring Trash…' });
   const trashSize = await duSize(path.join(HOME, '.Trash'));
 
+  return assembleResult(byGroup, nodeModules, largeFiles, trashSize, disk, emit, t0, false, dupBundles);
+}
+
+function assembleResult(byGroup, nodeModules, largeFiles, trashSize, disk, emit, t0, cancelledOut, dupBundles = []) {
   const groups = GROUPS.map((g) => ({
     ...g,
     items: byGroup.get(g.id) || []
@@ -421,12 +449,13 @@ async function measureAndAssemble(expanded, disk, emit, t0) {
     groups,
     safeBytes,
     reviewBytes,
-    nodeModules,
-    largeFiles,
-    largeThresholdMB,
-    duplicateBundles: dupBundles,
+    nodeModules: nodeModules || [],
+    largeFiles: largeFiles || [],
+    largeThresholdMB: 10,
+    duplicateBundles: dupBundles || [],
     trash: { sizeBytes: trashSize || 0, unreadable: trashSize === null },
-    fdaBlocked
+    fdaBlocked: false,
+    cancelled: cancelledOut
   };
 }
 
@@ -513,7 +542,7 @@ function listLocations() {
   } catch { /* no /Volumes */ }
   return locs;
 }
-module.exports = { scan, duSize, diskUsage, findDuplicateBundles, homeOverview, overview, listLocations, formatGB, shorten };
+module.exports = { scan, cancelScan, duSize, diskUsage, findDuplicateBundles, homeOverview, overview, listLocations, formatGB, shorten };
 
 // ── CLI mode: npm run scan ────────────────────────────────────────────────
 

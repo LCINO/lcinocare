@@ -139,8 +139,29 @@ const MOCK_PROCESSES = {
 };
 
 window.lcino = {
-  scan: () => new Promise((r) => setTimeout(() => r({ ok: true, result: MOCK_SCAN }), 400)),
-  onScanProgress: () => {},
+  scan: () => new Promise((resolve) => {
+    let cancelled = false;
+    window.lcinoScanCancelled = () => cancelled;
+    window.lcinoScanCancel = () => { cancelled = true; };
+    const stages = [
+      ['sizes', 'Sizing locations…'], ['caches', '~/Library/Caches/Google/Chrome'],
+      ['caches', '~/Library/Caches/com.apple.helpd'], ['appdata', '~/Library/Application Support/Claude/vm_bundles'],
+      ['appdata', '~/Library/Application Support/Code'], ['duplicates', 'autoclaw: found 11 duplicate copies'],
+      ['nodemodules', '~/LCINO/Lcino Editor/remotion/node_modules'], ['largefiles', '~/Downloads/big-video.mp4'],
+      ['trash', 'Measuring Trash…']
+    ];
+    let i = 0;
+    const tick = () => {
+      if (cancelled) { resolve({ ok: true, result: { ...MOCK_SCAN, cancelled: true } }); return; }
+      if (i >= stages.length) { resolve({ ok: true, result: MOCK_SCAN }); return; }
+      const [stage, detail] = stages[i++];
+      if (window.__mockScanCb) window.__mockScanCb({ stage, detail });
+      setTimeout(tick, 650);
+    };
+    tick();
+  }),
+  scanCancel: () => { if (window.lcinoScanCancel) window.lcinoScanCancel(); },
+  onScanProgress: (cb) => { window.__mockScanCb = cb; },
   onOverviewProgress: () => () => {},
   clean: (items) => new Promise((r) => setTimeout(() => r({ results: items.map((i) => ({ ...i, ok: true })), freedBytes: items.reduce((s, i) => s + (i.sizeBytes || 0), 0) }), 500)),
   trashInfo: () => Promise.resolve(MOCK_SCAN.trash),

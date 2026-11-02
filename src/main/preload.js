@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('lcino', {
   scan: () => ipcRenderer.invoke('scan:run'),
+  scanCancel: () => ipcRenderer.invoke('scan:cancel'),
   onScanProgress: (cb) => ipcRenderer.on('lcino:scan-progress', (_e, event) => cb(event)),
   // My Clutter progress — returns an unsubscribe function.
   onOverviewProgress: (cb) => {

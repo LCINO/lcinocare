@@ -212,44 +212,55 @@ function stopTimers() {
 
 // ── scan flow ─────────────────────────────────────────────────────────────
 
-function setOverlay(visible, detail, pct) {
-  const ov = $('#scan-overlay');
-  ov.classList.toggle('hidden', !visible);
-  if (visible) {
-    if (detail !== undefined) $('#scan-detail').textContent = detail;
-    if (pct !== undefined) $('#scan-bar-fill').style.width = `${Math.min(96, pct)}%`;
+// In-page working pill — replaces the old blocking white overlay everywhere.
+function showWorkingPill(text) {
+  let el = document.getElementById('working-pill');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'working-pill';
+    el.innerHTML = '<span class="mini-spinner"></span><span id="working-pill-text"></span>';
+    document.body.appendChild(el);
   }
+  el.querySelector('#working-pill-text').textContent = text;
+  el.classList.add('visible');
+}
+function hideWorkingPill() {
+  document.getElementById('working-pill')?.classList.remove('visible');
 }
 
+// Scan progress sink: whichever page is scanning registers itself here to
+// receive live progress events (file paths, stage counts).
+let scanProgressSink = null;
+function setScanProgressSink(fn) { scanProgressSink = fn; }
+
 window.lcino.onScanProgress((e) => {
-  if (e.stage === 'home-overview') return; // My Clutter draws its own inline progress
-  if (e.stage === 'sizes' && e.total) {
-    setOverlay(true, e.detail, (e.done / e.total) * 80);
-  } else if (e.detail) {
-    const pct = { caches: 5, appdata: 55, duplicates: 65, nodemodules: 75, largefiles: 85, trash: 92, cleaning: 30 }[e.stage];
-    setOverlay(true, e.detail, pct || 50);
-  }
+  if (scanProgressSink) { scanProgressSink(e); return; }
+  // pages without a sink (Dashboard rescan etc.) show the quiet pill
+  if (e.detail) showWorkingPill(e.detail);
+  if (e.stage === 'trash' || (e.stage === 'sizes' && e.total && e.done === e.total)) hideWorkingPill();
 });
 
 let latestScanResult = null;
 
-async function runScan2({ silent = false } = {}) {
-  if (state.scanning) return;
+async function runScan2() {
+  if (state.scanning) return { ok: false, cancelled: false, reason: 'busy' };
   state.scanning = true;
   state.selectedClean.clear();
   dl.selected.clear();
-  if (!silent) setOverlay(true, 'Preparing scan…', 3);
+  showWorkingPill('Scanning…');
   const { ok, reason } = await window.lcino.scan().then((r) => {
     if (r.ok) latestScanResult = r.result;
     return r;
   });
   state.scanning = false;
-  setOverlay(false);
-  if (!ok) { toast(`Scan failed: ${reason}`, 'err'); return; }
+  hideWorkingPill();
+  if (!ok) { toast(`Scan failed: ${reason}`, 'err'); return { ok: false, cancelled: false }; }
   state.scan = latestScanResult;
   state.dupes = null;
+  const cancelled = !!(latestScanResult && latestScanResult.cancelled);
   if (['dashboard', 'clean', 'duplicates', 'files', 'smart', 'cleanup-manager', 'perf-manager', 'downloads-tool'].includes(currentView)) showView(currentView);
-  toast(`Scan complete in ${(state.scan.durationMs / 1000).toFixed(0)}s — ${fmtBytes(state.scan.safeBytes)} safely cleanable`);
+  if (!cancelled) toast(`Scan complete in ${(state.scan.durationMs / 1000).toFixed(0)}s — ${fmtBytes(state.scan.safeBytes)} safely cleanable`);
+  return { ok: true, cancelled };
 }
 
 // ── dashboard ─────────────────────────────────────────────────────────────
@@ -456,9 +467,9 @@ function showTrashConfirm(items) {
     confirmText: `Move ${fmtBytes(total)} to Trash`,
     danger: true,
     onConfirm: async () => {
-      setOverlay(true, `Moving ${items.length} items to Trash…`, 30);
+      showWorkingPill(`Moving ${items.length} items to Trash…`);
       const { results, freedBytes } = await window.lcino.clean(items);
-      setOverlay(false);
+      hideWorkingPill();
       const failed = results.filter((r) => !r.ok);
       const okCount = results.length - failed.length;
       await runScan2({ silent: true });
@@ -523,7 +534,7 @@ async function confirmClean(items) {
           LcinoCare can quit ${it} gracefully — the same as pressing ⌘Q. Unsaved documents may ask the app to confirm first.`,
         confirmText: 'Quit & Continue',
         onConfirm: async () => {
-          setOverlay(true, 'Asking the app to quit…', 40);
+          showWorkingPill('Asking the app to quit…');
           await window.lcino.quitApps(running.flatMap((r) => r.pids));
           let still = running;
           for (let i = 0; i < 6; i++) {
@@ -531,7 +542,7 @@ async function confirmClean(items) {
             still = await window.lcino.appRunning(names);
             if (!still.length) break;
           }
-          setOverlay(false);
+          hideWorkingPill();
           if (still.length) {
             toast(`Still running: ${still.map((s) => s.display || s.name).join(', ')} — please quit manually, then try again`, 'err');
             return;
@@ -727,6 +738,134 @@ function selectedCleanItems() {
   return state.scan.groups.flatMap((g) => g.items).filter((i) => state.selectedClean.has(i.path));
 }
 
+// Smart Care live scan — cards cycle through scanning states in place.
+const SMART_PHASES = {
+  cleanup:      { label: 'Looking for junk…',      art: 'SC_ART.cleanup' },
+  clutter:      { label: 'Looking for clutter…',   art: 'SC_ART.clutter' },
+  applications: { label: 'Looking for updates…',   art: 'SC_ART.apps' },
+  protection:   { label: 'Checking safety zones…', art: 'SC_ART.protection' },
+  performance:  { label: 'Checking performance…',  art: 'SC_ART.perf' }
+};
+const STAGE_CARD = {
+  sizes: 'cleanup', caches: 'cleanup', appdata: 'cleanup', logs: 'cleanup', trash: 'cleanup',
+  duplicates: 'clutter', nodemodules: 'clutter', largefiles: 'clutter',
+  updates: 'applications', privacy: 'protection'
+};
+const smartScan = { active: false, phase: null, detail: '' };
+
+function smartCardSpec(id) {
+  const specs = {
+    cleanup:      { cls: 't-cleanup', art: SC_ART.cleanup,    top: 'Cleanup' },
+    protection:   { cls: 't-protection', art: SC_ART.protection, top: 'Protection' },
+    performance:  { cls: 't-perf', art: SC_ART.perf,       top: 'Performance' },
+    applications: { cls: 't-apps wide', art: SC_ART.apps,   top: 'Applications' },
+    clutter:      { cls: 't-clutter wide', art: SC_ART.clutter, top: 'My Clutter' }
+  };
+  return specs[id];
+}
+
+function renderSmartScanState() {
+  const view = $('#view-smart');
+  document.body.classList.remove('landing-mode');
+  document.body.classList.add('rail');
+  const order = ['cleanup', 'protection', 'performance', 'applications', 'clutter'];
+  const cards = order.map((id) => {
+    const spec = smartCardSpec(id);
+    const isScanning = smartScan.phase === id;
+    const done = smartScanDone(id);
+    const wide = id === 'applications' || id === 'clutter' || isScanning;
+    let inner;
+    if (isScanning) {
+      inner = `
+        <div class="sc-scan-head">Looking${smartScan.phase === 'cleanup' ? ' for junk' : smartScan.phase === 'clutter' ? ' for clutter' : smartScan.phase === 'applications' ? ' for updates' : ''}…</div>
+        <div class="sc-scan-art">${spec.art}</div>
+        <div class="sc-ticker">${esc(smartScan.detail || 'Preparing…')}</div>`;
+    } else if (done) {
+      const r = smartScan.results[id];
+      inner = `
+        <div class="sc-card-top">${spec.top}</div>
+        <div class="sc-art">${spec.art}</div>
+        <div class="sc-stat">${r}</div>`;
+    } else {
+      inner = `
+        <div class="sc-card-top">${spec.top}</div>
+        <div class="sc-art" style="opacity:.45">${spec.art}</div>
+        <div class="sc-stat" style="opacity:.4">Waiting…</div>`;
+    }
+    return `<div class="sc-card ${spec.cls} ${wide ? 'wide' : ''} ${isScanning ? 'scanning' : ''} ${done ? 'done' : ''} ${!isScanning && !done ? 'pending' : ''}" data-card="${id}">${inner}</div>`;
+  }).join('');
+
+  view.innerHTML = `
+    <div class="sc-top">
+      <button class="sc-startover" id="sc-startover" style="visibility:hidden">·</button>
+      <div class="sc-title">Smart Care</div>
+      <div></div>
+    </div>
+    <div class="sc-headline" id="smart-scan-headline">${esc(smartScan.headline || 'Scanning your Mac…')}</div>
+    <div class="sc-sheet">
+      <div class="sc-grid">${cards}</div>
+      <button class="sc-run stop" id="sc-stop">Stop</button>
+    </div>`;
+
+  $('#sc-stop').onclick = () => window.lcino.scanCancel();
+}
+
+function smartScanDone(id) {
+  const s = smartScan.results || {};
+  return Object.prototype.hasOwnProperty.call(s, id);
+}
+
+async function runSmartScanFlow() {
+  smartScan.active = true;
+  smartScan.results = {};
+  smartScan.phase = 'cleanup';
+  smartScan.detail = 'Preparing…';
+  smartScan.headline = 'Scanning your Mac…';
+  state.scanning = true;
+  state.selectedClean.clear();
+  dl.selected.clear();
+
+  // Smart Care results view in scan mode
+  showView('smart');
+  renderSmartScanState(); // overrides the landing render with the live grid
+  setScanProgressSink((ev) => {
+    const card = STAGE_CARD[ev.stage] || (ev.stage === 'updates' ? 'applications' : null);
+    if (!card) return;
+    smartScan.detail = ev.detail || smartScan.detail;
+    if (smartScan.phase !== card) {
+      smartScan.phase = card;
+      renderSmartScanState();
+    } else {
+      const tick = document.querySelector('.sc-card.scanning .sc-ticker');
+      if (tick) tick.textContent = smartScan.detail;
+    }
+  });
+
+  const r = await window.lcino.scan();
+  setScanProgressSink(null);
+
+  if (r.ok && r.result) {
+    state.scan = r.result;
+    smartScan.results.cleanup = `${fmtBytes(state.scan.safeBytes)} of junk`;
+    smartScan.results.clutter = `${(state.scan.groups.find((g) => g.id === 'duplicate-copies') || { items: [] }).items.length} duplicate bundles`;
+  }
+
+  // Applications phase — real update-feed check
+  if (!(r.ok && r.result && r.result.cancelled)) {
+    smartScan.phase = 'applications';
+    smartScan.detail = 'Checking update feeds…';
+    renderSmartScanState();
+    const ur = await window.lcino.updatesScan().catch(() => null);
+    if (ur && ur.ok) state.updatesApps = ur.apps;
+    smartScan.results.applications = state.updatesApps ? `${state.updatesApps.length} apps` : '—';
+  }
+
+  smartScan.active = false;
+  state.scanning = false;
+  setScanProgressSink(null);
+  showView('smart'); // results mode
+}
+
 async function renderSmart() {
   const view = $('#view-smart');
   // landing shows the full labeled sidebar; the results screen uses the icon rail
@@ -745,7 +884,7 @@ async function renderSmart() {
   if (!state.scan) {
     const mod = MODS.byId('smart');
     view.innerHTML = landingHtml(mod);
-    wireLanding(view, mod, () => runScan2()); // refresh list re-renders smart with results
+    wireLanding(view, mod, () => runSmartScanFlow()); // in-place card-cycle scan
     return;
   }
 
@@ -835,9 +974,35 @@ function landingHtml(mod) {
 }
 
 function defaultLandingScan(mod) {
+  const HEADINGS = {
+    cleanup: 'Looking for junk…',
+    spacelens: 'Mapping your storage…',
+    applications: 'Checking applications…',
+    clutter: 'Reviewing your files…',
+    performance: 'Checking performance…'
+  };
   return async () => {
-    await runScan2();
-    if (!state.scan) return;
+    if (state.scanning) return;
+    state.scanning = true;
+    const view = $(`#${VIEWS[mod.id].section}`);
+    const stage = view.querySelector('.module-landing');
+    stage.classList.add('scanning');
+    const stateEl = document.createElement('div');
+    stateEl.className = 'ml-scanstate';
+    stateEl.innerHTML = `<div class="ml-scan-heading">${HEADINGS[mod.id] || 'Scanning…'}</div><div class="ml-ticker">Preparing…</div>`;
+    stage.appendChild(stateEl);
+    const scanBtn = view.querySelector('[data-ml-scan]');
+    if (scanBtn) { scanBtn.textContent = 'Stop'; scanBtn.onclick = () => window.lcino.scanCancel(); }
+    setScanProgressSink((ev) => {
+      const tick = view.querySelector('.ml-ticker');
+      if (tick && ev.detail) tick.textContent = ev.detail;
+    });
+
+    const r = await window.lcino.scan();
+    setScanProgressSink(null);
+    state.scanning = false;
+    if (r.ok && r.result) state.scan = r.result;
+    if (r.result && r.result.cancelled) { showView(mod.id); return; } // back to the idle landing
     showView(mod.scanTo || 'smart');
   };
 }
@@ -957,9 +1122,9 @@ function renderTools() {
 }
 
 async function openSnapshots() {
-  setOverlay(true, 'Checking local snapshots…', 40);
+  showWorkingPill('Checking local snapshots…');
   const r = await window.lcino.snapshotsList();
-  setOverlay(false);
+  hideWorkingPill();
   if (!r.ok) { toast(`Could not read snapshots: ${r.reason}`, 'err'); return; }
   const rows = r.snapshots.map((s) => `
     <div class="snap-row">
@@ -976,9 +1141,9 @@ async function openSnapshots() {
     danger: r.snapshots.length > 0,
     onConfirm: async () => {
       if (!r.snapshots.length) return;
-      setOverlay(true, 'Thinning snapshots…', 50);
+      showWorkingPill('Thinning snapshots…');
       const res = await window.lcino.snapshotsPurge();
-      setOverlay(false);
+      hideWorkingPill();
       if (res.ok) toast(`Purged ${res.deleted} snapshot${res.deleted === 1 ? '' : 's'} ✓`);
       else toast(`Could not purge: ${res.reason}`, 'err');
     }
@@ -1402,13 +1567,13 @@ async function renderPerfManager() {
   }
   $('#pm-done').onclick = async () => {
     const paths = [...pm.selected];
-    setOverlay(true, 'Disabling background items…', 40);
+    showWorkingPill('Disabling background items…');
     let okCount = 0;
     for (const p of paths) {
       const r = await window.lcino.startupSetDisabled({ path: p, disabled: true });
       if (r && r.ok) okCount += 1;
     }
-    setOverlay(false);
+    hideWorkingPill();
     pm.selected.clear();
     if (okCount === paths.length) toast(`${okCount} background item${okCount > 1 ? 's' : ''} disabled — takes effect on next sign-in`);
     else toast(`Disabled ${okCount} of ${paths.length} — the rest need manual attention`, 'err');
@@ -1469,9 +1634,9 @@ async function runMaintenance(ids) {
   const tasks = await window.lcino.maintenanceList();
   const quitApps = [...new Set(tasks.filter((t) => ids.includes(t.id) && t.requiresAppQuit).flatMap((t) => t.requiresAppQuit))];
   const proceed = async () => {
-    setOverlay(true, 'Running maintenance tasks…', 10);
+    showWorkingPill('Running maintenance tasks…');
     const { results } = await window.lcino.maintenanceRun(ids);
-    setOverlay(false);
+    hideWorkingPill();
     const ok = results.filter((r) => r.ok);
     const failed = results.filter((r) => !r.ok);
     showModal({
@@ -1684,9 +1849,9 @@ async function renderPrivacyTool() {
     const appName = BROWSER_APP[b.id] || b.name;
     const running = await window.lcino.appRunning([appName]);
     const doClean = async () => {
-      setOverlay(true, `Cleaning ${appName} privacy items…`, 40);
+      showWorkingPill(`Cleaning ${appName} privacy items…`);
       const { results, freedBytes } = await window.lcino.privacyClean(items);
-      setOverlay(false);
+      hideWorkingPill();
       const failed = results.filter((r) => !r.ok);
       if (failed.length === results.length) toast(`Could not clean: ${failed[0].reason}`, 'err');
       else toast(`${fmtBytes(freedBytes)} of privacy traces moved to Trash ✓`);
@@ -1807,9 +1972,9 @@ function renderSimilarImages() {
 }
 
 async function runSimilarScan() {
-  setOverlay(true, 'Hashing images…', 40);
+  showWorkingPill('Hashing images…');
   const r = await window.lcino.similarScan();
-  setOverlay(false);
+  hideWorkingPill();
   if (!r.ok) { toast('Similar-image scan failed.', 'err'); return; }
   si.groups = r.groups;
   si.scanned = r.scanned || 0;
@@ -1942,9 +2107,9 @@ function renderShredder() {
       confirmText: `Shred ${fmtBytes(total)}`,
       danger: true,
       onConfirm: async () => {
-        setOverlay(true, 'Shredding…', 30);
+        showWorkingPill('Shredding…');
         const r = await window.lcino.shredderRun(picked.map((p) => p.path));
-        setOverlay(false);
+        hideWorkingPill();
         const ok = r.results.filter((x) => x.ok).length;
         toast(`${ok} of ${r.results.length} files shredded ✓`);
         sh.picked = null;
@@ -2289,9 +2454,9 @@ async function renderDuplicates() {
       </div>`;
     $('#dup-scan').onclick = async () => {
       const minSizeMB = Math.max(1, parseInt($('#dup-min').value, 10) || 10);
-      setOverlay(true, 'Collecting files…', 20);
+      showWorkingPill('Collecting files…');
       const result = await window.lcino.findDuplicates({ minSizeMB });
-      setOverlay(false);
+      hideWorkingPill();
       state.dupes = result;
       renderDuplicates();
     };
@@ -2747,7 +2912,6 @@ async function onSearchInput() {
 document.addEventListener('DOMContentLoaded', async () => {
   // inject brand + build the module sidebar from the registry
   $('#brand-logo-holder').innerHTML = Icons.brandLogo(30);
-  $('#scan-logo').innerHTML = Icons.brandLogo(40);
   const nav = $('#nav');
   nav.innerHTML = MODS.MODULES.map((m) => `
     <button class="nav-item" data-view="${m.id}" title="${esc(m.nav || m.title)}">
@@ -2781,7 +2945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   showView('smart');
   // No automatic scan on launch — Smart Care's landing invites the first Scan.
   if (window.LcinoOnboarding && window.LcinoOnboarding.shouldShow()) {
-    window.LcinoOnboarding.show(() => runScan2());
+    window.LcinoOnboarding.show(() => { /* landing awaits the first Scan */ });
   } else {
     setTimeout(doUpdateCheck, 6000); // quiet update check after launch
   }

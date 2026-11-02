@@ -879,3 +879,51 @@ html[data-force-theme="dark"] .mgr {
 .ss-card p { font-size: 12.5px; line-height: 1.5; color: var(--mgr-text-2); margin-bottom: 4px; max-width: 560px; }
 .ss-meta { font-size: 12px; color: var(--mgr-text-3); }
 .ss-meta.warn { color: #ff9f0a; font-weight: 600; }
+
+/* ── in-place scanning states (no popups — everything lives in the page) ── */
+
+.module-landing { transition: filter .4s ease; }
+.module-landing .ml-art, .module-landing .ml-panel { transition: opacity .4s ease, transform .4s ease; }
+.module-landing.scanning .ml-art { opacity: .28; transform: scale(.94); filter: saturate(.55) blur(1px); }
+.module-landing.scanning .ml-panel { opacity: .18; transform: scale(.97); pointer-events: none; }
+.module-landing.scanning .ml-footnote { opacity: .3; }
+
+.ml-scanstate {
+  position: absolute; left: 0; right: 0; top: 34%;
+  text-align: center; pointer-events: none; z-index: 4;
+  animation: obFade .4s ease both;
+}
+.ml-scan-heading { font-size: 38px; font-weight: 700; letter-spacing: -0.6px; color: #fff; }
+.ml-ticker {
+  margin-top: 12px;
+  font-size: 12.5px; font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 70%; margin-left: auto; margin-right: auto;
+}
+
+/* smart care live card-cycle */
+.sc-card { transition: opacity .35s ease, transform .35s cubic-bezier(.3,.9,.4,1), box-shadow .35s ease; }
+.sc-card.pending { opacity: .38; }
+.sc-card.scanning {
+  grid-column: 1 / -1;
+  opacity: 1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 20px 60px rgba(10, 0, 24, 0.5), 0 0 0 2px rgba(242, 47, 192, 0.55);
+  display: flex; flex-direction: row; align-items: center; gap: 30px;
+  min-height: 240px; padding: 26px 30px;
+}
+.sc-card.scanning .sc-scan-head {
+  font-size: 34px; font-weight: 700; letter-spacing: -0.5px; color: #fff;
+  flex: 1.1; line-height: 1.15;
+}
+.sc-card.scanning .sc-scan-art { flex: 1; display: flex; justify-content: center; filter: drop-shadow(0 24px 44px rgba(0,0,0,.4)); animation: floaty 4.5s ease-in-out infinite; }
+.sc-card.scanning .sc-scan-art svg { width: 200px; height: 200px; }
+.sc-ticker {
+  position: absolute; left: 30px; right: 30px; bottom: 16px;
+  font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.68);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sc-card.done { opacity: 1; }
+.sc-run.stop { background: radial-gradient(circle at 50% 32%, #ff4f9e, #b3067c 80%); }
