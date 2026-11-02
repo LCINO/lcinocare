@@ -1,7 +1,7 @@
 {
   "name": "lcinocare",
   "productName": "LcinoCare",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Therapy for Your Mac \u2014 storage health, junk cleaning, and system care for macOS.",
   "main": "src/main/main.js",
   "author": "LCINO",
@@ -38,14 +38,45 @@
           ]
         }
       ],
-      "identity": null,
       "category": "public.app-category.utilities",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "type": "distribution",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
     },
     "publish": {
       "provider": "github",
       "owner": "LCINO",
       "repo": "lcinocare"
+    },
+    "afterSign": "build/afterSign.js",
+    "dmg": {
+      "title": "LcinoCare ${version}",
+      "background": "build/dmg-background.png",
+      "window": {
+        "x": 240,
+        "y": 180,
+        "width": 660,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 165,
+          "y": 250,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 495,
+          "y": 250,
+          "type": "file",
+          "path": "dist/mac-arm64/LcinoCare.app"
+        }
+      ],
+      "writeUpdateInfo": true
     }
   },
   "devDependencies": {
