@@ -18,6 +18,8 @@ const maintenance = require('./maintenance');
 const downloads = require('./downloads');
 const updates = require('./updates');
 const privacy = require('./privacy');
+const protection = require('./protection');
+const shredder = require('./shredder');
 const similar = require('./similar');
 const menuBar = require('./menu');
 const schedule = require('./schedule');
@@ -326,6 +328,22 @@ function wireIpc() {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
+  ipcMain.handle('protection:status', () => protection.status());
+  ipcMain.handle('shredder:run', (_e, paths) => {
+    scanning = true;
+    try {
+      return shredder.shred(paths, { onProgress: emitProgress });
+    } finally {
+      scanning = false;
+    }
+  });
+  ipcMain.handle('dialog:choose-files', async () => {
+    const r = await dialog.showOpenDialog(win, {
+      properties: ['openFile', 'multiSelections'],
+      buttonLabel: 'Shred These'
+    });
+    return r.canceled ? null : r.filePaths;
+  });
   ipcMain.handle('schedule:get', () => schedule.status());
   ipcMain.handle('schedule:set', (_e, { schedule, hour }) => schedule.set(schedule, hour));
 
@@ -431,7 +449,7 @@ function wireIpc() {
     }
   });
   ipcMain.handle('open:external', (_e, url) => {
-    if (!/^https?:\/\//.test(String(url))) return { ok: false, reason: 'Only http(s) links can be opened.' };
+    if (!/^(https?:\/\/|x-apple\.systempreferences:)/.test(String(url))) return { ok: false, reason: 'Only http(s) and System Settings links can be opened.' };
     shell.openExternal(String(url));
     return { ok: true };
   });

@@ -113,7 +113,8 @@ const MODS = window.LcinoModules;
 const MODULE_PARENT = {
   smart: 'smart',
   cleanup: 'cleanup', 'cleanup-manager': 'cleanup', clean: 'cleanup',
-  protection: 'protection', protected: 'protection', 'privacy-tool': 'protection',
+  protection: 'protection', protected: 'protection', 'privacy-tool': 'protection', 'security-status': 'protection',
+  tools: 'tools', 'shredder-tool': 'tools',
   performance: 'performance', speed: 'performance', startup: 'performance', 'perf-manager': 'performance',
   applications: 'applications', apps: 'applications', 'updates-tool': 'applications',
   clutter: 'clutter', files: 'clutter', duplicates: 'clutter', 'similar-images': 'clutter',
@@ -140,6 +141,8 @@ const VIEWS = {
   'perf-manager': { title: 'Performance Manager', render: renderPerfManager },
   'downloads-tool': { title: 'Downloads', render: renderDownloads, section: 'view-land-downloads' },
   'privacy-tool': { title: 'Privacy Items', render: renderPrivacyTool, section: 'view-land-privacy' },
+  'security-status': { title: 'Security Status', render: renderSecurityStatus, section: 'view-land-secstatus' },
+  'shredder-tool': { title: 'Shredder', render: renderShredder, section: 'view-land-shredder' },
   'similar-images': { title: 'Similar Images', render: renderSimilarImages, section: 'view-land-similar' },
   'updates-tool': { title: 'App Updater', render: renderUpdates, section: 'view-land-updates' },
   bubble: { title: 'My Clutter Map', render: renderClutter, section: 'view-clutter' },
@@ -914,6 +917,7 @@ function renderTools() {
 
   const open = (tool) => {
     if (tool.action === 'snapshots') openSnapshots();
+    else if (tool.action === 'shredder') showView('shredder-tool');
     else openView(tool.view, tool.pane);
   };
 
@@ -1594,7 +1598,15 @@ async function refreshDownloads() {
 
 // ── privacy items tool ───────────────────────────────────────────────────
 
-const pv = { data: null, active: null, selected: new Set() };
+const pv = { data: null, active: null, selected: new Set(), pane: 'items' };
+const PRIVACY_GUIDE = [
+  { name: 'Camera', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera', why: 'See which apps can use your camera.' },
+  { name: 'Microphone', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone', why: 'See which apps can listen.' },
+  { name: 'Screen Recording', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture', why: 'Apps that can capture your screen.' },
+  { name: 'Full Disk Access', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles', why: 'The most powerful grant there is — audit it.' },
+  { name: 'Accessibility', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility', why: 'Apps that can control your Mac.' },
+  { name: 'Automation', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation', why: 'Apps controlling other apps.' }
+];
 
 const BROWSER_APP = {
   chrome: 'Google Chrome', edge: 'Microsoft Edge', brave: 'Brave',
@@ -1603,6 +1615,7 @@ const BROWSER_APP = {
 
 async function renderPrivacyTool() {
   const view = $('#view-land-privacy');
+  if (pv.pane === 'permissions') { renderPrivacyPermissions(view); return; }
   if (!pv.data) { await refreshPrivacy(); return; }
   const { browsers } = pv.data;
   if (!browsers.length) {
@@ -1629,7 +1642,10 @@ async function renderPrivacyTool() {
   view.innerHTML = `
     <div class="mgr two">
       <div class="mgr-side">
-        ${browsers.map((x) => `<button class="mgr-nav ${x.id === pv.active ? 'active' : ''}" data-pv-nav="${x.id}">${esc(x.name)}</button>`).join('')}
+        <button class="mgr-nav ${pv.pane === 'items' ? 'active' : ''}" data-pv-pane="items">Browser Traces</button>
+        <button class="mgr-nav ${pv.pane === 'permissions' ? 'active' : ''}" data-pv-pane="permissions">App Permissions</button>
+        <div style="height:10px"></div>
+        ${browsers.map((x) => `<button class="mgr-nav ${pv.pane === 'items' && x.id === pv.active ? 'active' : ''}" data-pv-nav="${x.id}" style="padding-left:22px;font-size:12.5px">${esc(x.name)}</button>`).join('')}
       </div>
       <div class="mgr-items">
         <div class="mgr-pane-title">${esc(b.name)} Privacy</div>
@@ -1649,7 +1665,8 @@ async function renderPrivacyTool() {
       </div>
     </div>`;
 
-  view.querySelectorAll('[data-pv-nav]').forEach((btn) => btn.onclick = () => { pv.active = btn.dataset.pvNav; pv.selected.clear(); renderPrivacyTool(); });
+  view.querySelectorAll('[data-pv-nav]').forEach((btn) => btn.onclick = () => { pv.active = btn.dataset.pvNav; pv.pane = 'items'; renderPrivacyTool(); });
+  view.querySelectorAll('[data-pv-pane]').forEach((btn) => btn.onclick = () => { pv.pane = btn.dataset.pvPane; renderPrivacyTool(); });
   view.querySelectorAll('.pv-check').forEach((cb) => cb.addEventListener('change', () => {
     if (cb.checked) pv.selected.add(cb.dataset.pv);
     else pv.selected.delete(cb.dataset.pv);
@@ -1691,6 +1708,21 @@ async function renderPrivacyTool() {
       await doClean();
     }
   };
+}
+
+function renderPrivacyPermissions(view) {
+  view.innerHTML = `
+    <div class="mgr-pane-title">App Permissions</div>
+    <div class="mgr-pane-desc">The permissions that matter most on macOS, each one managed by the system itself. Open a pane, see which apps have it, revoke what you don't recognize — LcinoCare can't read the private database, and it won't pretend to.</div>
+    ${PRIVACY_GUIDE.map((g) => `
+      <div class="mgr-item">
+        ${mgrTile(g.name, '#ff5fb0')}
+        <div class="mi-info"><div class="mi-name">${esc(g.name)}</div><div class="mi-sub">${esc(g.why)}</div></div>
+        <button class="btn small primary" data-pg-open="${esc(g.url)}">Open</button>
+      </div>`).join('')}
+    <div class="mgr-note">These open <b>System Settings → Privacy &amp; Security</b> directly — revoking happens there, by you.</div>`;
+
+  view.querySelectorAll('[data-pg-open]').forEach((b) => b.onclick = () => window.lcino.openExternal(b.dataset.pgOpen));
 }
 
 async function refreshPrivacy() {
@@ -1789,6 +1821,138 @@ async function runSimilarScan() {
   else toast(`${r.groupCount} similar group${r.groupCount === 1 ? '' : 's'} found in ${r.scanned} images.`);
 }
 
+
+
+// ── security status (honest macOS protection report) ─────────────────────
+
+const PRIVACY_PANES = [
+  { name: 'Camera', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera', why: 'See which apps can use your camera.' },
+  { name: 'Microphone', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone', why: 'See which apps can listen.' },
+  { name: 'Screen Recording', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture', why: 'Apps that can capture your screen.' },
+  { name: 'Full Disk Access', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles', why: 'The most powerful grant — audit it.' },
+  { name: 'Accessibility', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility', why: 'Apps that can control your Mac.' },
+  { name: 'Automation', url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation', why: 'Apps controlling other apps.' }
+];
+
+async function renderSecurityStatus() {
+  const view = $('#view-land-secstatus');
+  view.innerHTML = '<div class="card empty"><div class="spinner"></div></div>';
+  const r = await window.lcino.protectionStatus().catch(() => null);
+  if (!r || !r.ok) { view.innerHTML = '<div class="card empty">Could not read security status.</div>'; return; }
+  const { xprotect: xp, filevault: fv, firewall: fw, gatekeeper: gk } = r;
+
+  const stat = (on) => on === true ? '<span class="ss-val good">On</span>' : on === false ? '<span class="ss-val warn">Off</span>' : '<span class="ss-val">Unknown</span>';
+
+  view.innerHTML = `
+    <div class="mgr two">
+      <div class="mgr-side">
+        <button class="mgr-nav active">Security Status</button>
+        <button class="mgr-nav" data-ss-view="privacy-tool">Privacy Items</button>
+        <button class="mgr-nav" data-ss-view="protected">Safety Blocklist</button>
+      </div>
+      <div class="mgr-items">
+        <div class="mgr-pane-title">Built-in macOS Protection</div>
+        <div class="mgr-pane-desc">LcinoCare ships no antivirus — instead, here is the real, live state of the protection macOS already runs for you. All of it is managed by the system itself.</div>
+
+        <div class="ss-card ${xp.available ? '' : 'dim'}">
+          <div class="ss-head"><span class="ss-ico" style="background:linear-gradient(145deg,#ff5fb0,#a80b6b)">${MODS.glyph('protected', 18, '#fff')}</span><b>XProtect</b>${xp.signatures ? `<span class="mm-badge dim">v${esc(xp.signatures)}</span>` : ''}</div>
+          <p>Apple's built-in malware signature database — updated silently in the background by macOS.</p>
+          ${xp.lastUpdate ? `<p class="ss-meta">Last signature update: <b>${esc(xp.lastUpdate)}</b></p>` : ''}
+        </div>
+
+        <div class="ss-card ${fv.available ? '' : 'dim'}">
+          <div class="ss-head"><span class="ss-ico" style="background:linear-gradient(145deg,#5b8bff,#2440c8)">${MODS.glyph('protected', 18, '#fff')}</span><b>FileVault</b>${fv.available ? stat(fv.on) : ''}</div>
+          <p>Full-disk encryption for everything on your Mac. If your Mac is lost, your data stays yours.</p>
+          ${fv.available && !fv.on ? '<p class="ss-meta warn">Consider turning it on — System Settings → Privacy & Security → FileVault.</p>' : ''}
+        </div>
+
+        <div class="ss-card ${fw.available ? '' : 'dim'}">
+          <div class="ss-head"><span class="ss-ico" style="background:linear-gradient(145deg,#4ade80,#0a8f8f)">${MODS.glyph('shield', 18, '#fff')}</span><b>Firewall</b>${fw.available ? stat(fw.on) : ''}</div>
+          <p>Blocks unwanted incoming network connections. Recommended: On.</p>
+          ${fw.available && !fw.on ? '<p class="ss-meta warn">System Settings → Network → Firewall → turn it on.</p>' : ''}
+        </div>
+
+        <div class="ss-card ${gk.available ? '' : 'dim'}">
+          <div class="ss-head"><span class="ss-ico" style="background:linear-gradient(145deg,#ffb84f,#d1490f)">${MODS.glyph('applications', 18, '#fff')}</span><b>Gatekeeper</b>${gk.available ? stat(gk.on) : ''}</div>
+          <p>Keeps unverified software from launching without your explicit say-so.</p>
+        </div>
+
+        <div class="mgr-note">Honest note: this is a <b>status report</b>, not a virus scan. macOS already scans for known malware with these very tools — LcinoCare won't pretend to duplicate that.</div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('[data-ss-view]').forEach((b) => b.onclick = () => showView(b.dataset.ssView));
+}
+
+// ── shredder tool ────────────────────────────────────────────────────────
+
+const sh = { picked: null };
+
+function renderShredder() {
+  const view = $('#view-land-shredder');
+  const t = MODS.byId('tools').theme;
+  const picked = sh.picked || [];
+  const total = picked.reduce((s, p) => s + (p.sizeBytes || 0), 0);
+
+  view.innerHTML = `
+    <div class="tools-wrap" style="--m-from:${t.from};--m-to:${t.to};--m-deep:${t.deep};--m-pill:${t.pill}">
+      <h1 class="ml-title">Shredder</h1>
+      <p class="ml-tagline">Overwrites file contents with random bytes before removal. For documents with secrets — tax files, contracts, keys.</p>
+      <div class="mgr-note" style="max-width:640px">Honest caveat: on modern APFS drives with snapshots, shredding is <b>best-effort</b>, not a guarantee. The safest option for truly sensitive files is full-disk encryption (FileVault) — which LcinoCare can check for you in Security Status.</div>
+      <div class="tools-search">
+        <button class="btn primary" id="sh-pick" style="width:100%">Choose Files to Shred…</button>
+      </div>
+      ${picked.length ? `
+      <div class="mgr-items" style="padding:12px 0 0;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);margin-top:14px">
+        ${picked.map((p) => `
+          <div class="mgr-item">
+            ${mgrTile(p.name, '#ff453a')}
+            <div class="mi-info"><div class="mi-name">${esc(p.name)}</div><div class="mi-sub">${esc(tilt(p.path))}</div></div>
+            <div class="mi-size">${fmtBytes(p.sizeBytes)}</div>
+            <button class="mi-sparkle" data-sh-remove="${esc(p.path)}" title="Remove from list">✕</button>
+          </div>`).join('')}
+        <div class="mgr-bar">
+          <div class="mb-info">${picked.length} file${picked.length > 1 ? 's' : ''} <span>|</span> ${fmtBytes(total)}</div>
+          <div class="mb-spacer"></div>
+          <button class="mgr-done" id="sh-run">Shred Permanently</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+
+  $('#sh-pick').onclick = async () => {
+    const paths = await window.lcino.shredderPick();
+    if (!paths || !paths.length) return;
+    const metas = await Promise.all(paths.map(async (p) => {
+      let sizeBytes = 0; let name = p.split('/').pop();
+      try { const st = await (require('fs')).promises.stat(p); sizeBytes = st.size; name = p.split('/').pop(); } catch { /* gone */ }
+      return { path: p, name, sizeBytes };
+    }));
+    sh.picked = metas;
+    renderShredder();
+  };
+  view.querySelectorAll('[data-sh-remove]').forEach((b) => b.onclick = () => {
+    sh.picked = (sh.picked || []).filter((p) => p.path !== b.dataset.shRemove);
+    renderShredder();
+  });
+  const run = $('#sh-run');
+  if (run) run.onclick = () => {
+    showModal({
+      title: 'Shred these files?',
+      bodyHtml: `<b>${picked.length} file${picked.length > 1 ? 's' : ''} · ${fmtBytes(total)}</b> will be overwritten with random bytes and removed — <b>this cannot be undone</b>, not even from the Trash.`,
+      confirmText: `Shred ${fmtBytes(total)}`,
+      danger: true,
+      onConfirm: async () => {
+        setOverlay(true, 'Shredding…', 30);
+        const r = await window.lcino.shredderRun(picked.map((p) => p.path));
+        setOverlay(false);
+        const ok = r.results.filter((x) => x.ok).length;
+        toast(`${ok} of ${r.results.length} files shredded ✓`);
+        sh.picked = null;
+        renderShredder();
+      }
+    });
+  };
+}
 
 // ── app updater tool ─────────────────────────────────────────────────────
 

@@ -64,6 +64,9 @@ contextBridge.exposeInMainWorld('lcino', {
   menuQuickClean: () => ipcRenderer.invoke('menu:quick-clean'),
   appShow: () => ipcRenderer.invoke('app:show'),
   menuHide: () => ipcRenderer.invoke('menu:hide'),
+  protectionStatus: () => ipcRenderer.invoke('protection:status'),
+  shredderPick: () => ipcRenderer.invoke('dialog:choose-files'),
+  shredderRun: (paths) => ipcRenderer.invoke('shredder:run', paths),
   privacyScan: () => ipcRenderer.invoke('privacy:scan'),
   privacyClean: (items) => ipcRenderer.invoke('privacy:clean', items),
   similarScan: () => ipcRenderer.invoke('similar:scan')

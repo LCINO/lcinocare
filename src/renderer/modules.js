@@ -99,6 +99,7 @@
       art: () => art('#ff4fae', '#b00b6e', '#5c0238', hexagon(),
         '<path d="M8.2 11V6.4a1.15 1.15 0 0 1 2.3 0V10m0-4.4V4.8a1.15 1.15 0 0 1 2.3 0V10m0-4.6a1.15 1.15 0 0 1 2.3 0V11m0-4a1.15 1.15 0 0 1 2.3 0v5.4c0 3.6-2.4 6.4-5.8 6.4-2.8 0-4.1-1.4-5.3-3.4L4.6 12.6c-.6-1-.2-2 .8-2.4.8-.3 1.7 0 2.2.8z" fill="#fff"/>'),
       rows: [
+        { icon: 'shield', label: 'Security Status', sub: 'XProtect, FileVault, Firewall — the real state', view: 'security-status' },
         { icon: 'shield', label: 'Safety Blocklist', sub: 'System zones that can never be touched', view: 'protected' },
         { icon: 'protected', label: 'Privacy Items', sub: 'History, cookies and storage left by browsers', view: 'privacy-tool' },
         { icon: 'trash', label: 'Trash-Only Deletion', sub: 'Nothing is erased without a second confirm', view: 'protected' },
@@ -211,7 +212,8 @@
     { icon: 'files', label: 'Downloads', desc: 'Review and clean one-time files piling up in Downloads.', view: 'downloads-tool', color: ['#0a84ff', '#0a4fa8'] },
     { icon: 'protected', label: 'Privacy Items', desc: 'Remove browsing history, cookies and storage traces.', view: 'privacy-tool', color: ['#ff5fb0', '#a80b6b'] },
     { icon: 'clutter', label: 'Similar Images', desc: 'Group near-duplicate photos and keep only the best.', view: 'similar-images', color: ['#3fe0d0', '#12869b'] },
-    { icon: 'applications', label: 'App Updater', desc: 'See which apps published a new version — honestly.', view: 'updates-tool', color: ['#5b7cfa', '#2440c8'] }
+    { icon: 'applications', label: 'App Updater', desc: 'See which apps published a new version — honestly.', view: 'updates-tool', color: ['#5b7cfa', '#2440c8'] },
+    { icon: 'protected', label: 'Shredder', desc: 'Overwrite sensitive files beyond recovery — best-effort, honestly labeled.', action: 'shredder', color: ['#ff453a', '#a80b30'] }
   ];
 
   function glyph(key, size = 18, color = '#fff') {

@@ -283,6 +283,18 @@ window.lcino = {
   }),
   scheduleGet: () => Promise.resolve({ enabled: false, schedule: 'off', hour: 10 }),
   scheduleSet: (cfg) => Promise.resolve({ ok: true, enabled: cfg.schedule !== 'off', schedule: cfg.schedule, hour: cfg.hour }),
+  protectionStatus: () => Promise.resolve({
+    ok: true,
+    xprotect: { available: true, signatures: '5368', remediator: '170', mrt: '1.93', lastUpdate: null, readable: true },
+    filevault: { available: true, on: true, note: 'FileVault is On.' },
+    firewall: { available: true, on: false, note: 'Firewall is disabled. (State = 0)' },
+    gatekeeper: { available: true, on: true, note: 'assessments enabled' }
+  }),
+  shredderPick: () => Promise.resolve([
+    { path: '/Users/anamdev/Documents/tax-returns-2025.pdf', name: 'tax-returns-2025.pdf', sizeBytes: 2.4 * 1024 * 1024 },
+    { path: '/Users/anamdev/Documents/contracts/nda-signed.pdf', name: 'nda-signed.pdf', sizeBytes: 880 * 1024 }
+  ]),
+  shredderRun: (paths) => Promise.resolve({ ok: true, results: paths.map((p) => ({ path: p, ok: true, bytes: 1048576 })), totalBytes: paths.length * 1048576 }),
   privacyScan: () => Promise.resolve({
     ok: true,
     browsers: [
