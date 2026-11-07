@@ -863,7 +863,7 @@ table.tbl tbody tr:hover { background: var(--row-hover); }
 
 #working-pill {
   position: fixed;
-  left: 50%; bottom: 22px;
+  left: 50%; bottom: 120px;
   transform: translate(-50%, 80px);
   display: flex; align-items: center; gap: 10px;
   padding: 11px 20px;

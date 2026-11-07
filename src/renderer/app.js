@@ -201,6 +201,7 @@ function showView(name) {
     back.classList.add('hidden');
   }
   $('#search-results').classList.add('hidden');
+  hideWorkingPill();
   stopTimers();
   meta.render();
 }
@@ -234,8 +235,12 @@ let scanProgressSink = null;
 function setScanProgressSink(fn) { scanProgressSink = fn; }
 
 window.lcino.onScanProgress((e) => {
+  // Stale events can arrive after a scan page has already rendered its
+  // results (IPC in-flight vs invoke-reply ordering) — showing those as a
+  // pill left a stuck "Reading…" pill over finished pages. Only surface
+  // progress while a scan is actually running.
+  if (!state.scanning && !smartScan.active) { hideWorkingPill(); return; }
   if (scanProgressSink) { scanProgressSink(e); return; }
-  // pages without a sink (Dashboard rescan etc.) show the quiet pill
   if (e.detail) showWorkingPill(e.detail);
   if (e.stage === 'trash' || (e.stage === 'sizes' && e.total && e.done === e.total)) hideWorkingPill();
 });
@@ -863,6 +868,7 @@ async function runSmartScanFlow() {
   smartScan.active = false;
   state.scanning = false;
   setScanProgressSink(null);
+  hideWorkingPill();
   showView('smart'); // results mode
 }
 
