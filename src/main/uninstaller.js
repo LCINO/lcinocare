@@ -164,17 +164,21 @@ async function appIconDataUrl(appPath) {
   return dataUrl;
 }
 
-// Fast metadata for a list row: real icon, version, install (birth) date.
+// Fast metadata for a list row: real icon, version, install (birth) date,
+// plus what the Applications filters group by — the bundle id (vendor) and
+// whether the app came from the Mac App Store (it carries a store receipt).
 async function appMeta(appPath) {
-  if (!appPath.endsWith('.app')) return { icon: null, version: null, addedMs: null };
+  if (!appPath.endsWith('.app')) return { icon: null, version: null, addedMs: null, bundleId: null, appStore: false };
   const infoPlist = path.join(appPath, 'Contents', 'Info.plist');
-  const [icon, version] = await Promise.all([
+  const [icon, version, bundleId] = await Promise.all([
     appIconDataUrl(appPath),
-    plutilExtract(infoPlist, 'CFBundleShortVersionString')
+    plutilExtract(infoPlist, 'CFBundleShortVersionString'),
+    plutilExtract(infoPlist, 'CFBundleIdentifier')
   ]);
   let addedMs = null;
   try { addedMs = (await fsp.stat(appPath)).birthtimeMs; } catch { /* unreadable */ }
-  return { icon, version, addedMs };
+  const appStore = fs.existsSync(path.join(appPath, 'Contents', '_MASReceipt', 'receipt'));
+  return { icon, version, addedMs, bundleId, appStore };
 }
 
 module.exports = { listApps, inspect, findLeftovers, runningPids, duSize, appMeta };

@@ -2,7 +2,7 @@
 
 // LcinoCare — main process: window lifecycle, IPC wiring, single-flight scan.
 
-const { app, BrowserWindow, Menu, ipcMain, shell, nativeTheme, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, nativeTheme, dialog, nativeImage } = require('electron');
 const path = require('path');
 
 const scanner = require('./scanner');
@@ -42,16 +42,50 @@ const HOME_PATH = require('os').homedir();
 let lastScan = null;
 let appsCache = null;
 
+// Every path the main process has put in front of the user (scan results,
+// finder tools, app inspections), mapped to the processes that own it.
+// Delete requests may only name these, so a renderer bug or injected script
+// cannot ask us to trash an arbitrary path.
+const offeredPaths = new Map();
+// Browser trace files found by the Privacy scan (History, Cookies, *.sqlite).
+// Kept apart: they are cleanable only through privacy:clean.
+const privacyPaths = new Map();
+function offer(result, into = offeredPaths, depth = 0) {
+  if (!result || typeof result !== 'object' || depth > 8) return result;
+  if (Array.isArray(result)) {
+    result.forEach((r) => offer(r, into, depth + 1));
+    return result;
+  }
+  if (typeof result.path === 'string') {
+    const key = path.resolve(result.path);
+    const names = Array.isArray(result.processNames) ? result.processNames : [];
+    into.set(key, [...new Set([...(into.get(key) || []), ...names])]);
+  }
+  for (const v of Object.values(result)) if (v && typeof v === 'object') offer(v, into, depth + 1);
+  return result;
+}
+
+// Files the user picked in the Shredder's own file dialog — the only paths
+// the Shredder will ever accept.
+const pickedForShred = new Set();
+
+// The window is transparent and OVERHANG px taller than the visible panel, so
+// the round Scan / Stop / Run button can sit half on the panel's bottom edge
+// and half below it. The renderer draws the panel (rounded corners, background)
+// and leaves that strip empty. Must match --overhang in styles.css.
+const OVERHANG = 96; // half the 96px button + 48px for its ring and glow, which the window edge would otherwise cut flat
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1220,
-    height: 800,
+    height: 800 + OVERHANG,
     minWidth: 1000,
-    minHeight: 640,
+    minHeight: 640 + OVERHANG,
     title: 'LcinoCare',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#120016' : '#f4f4f8',
+    transparent: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -59,6 +93,13 @@ function createWindow() {
     }
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  // macOS draws a transparent window's shadow from its painted pixels; refresh
+  // it once the panel is on screen so the shadow follows the panel's shape.
+  win.webContents.on('did-finish-load', () => setTimeout(() => win && win.invalidateShadow(), 300));
+  // Full screen has no room for an overhang: tell the panel to fill the screen.
+  const sendFullscreen = (on) => win && win.webContents.send('lcino:fullscreen', on);
+  win.on('enter-full-screen', () => sendFullscreen(true));
+  win.on('leave-full-screen', () => { sendFullscreen(false); setTimeout(() => win && win.invalidateShadow(), 300); });
   win.on('closed', () => (win = null));
 }
 
@@ -104,7 +145,7 @@ async function runScan() {
   if (scanning) return { ok: false, reason: 'busy' };
   scanning = true;
   try {
-    const result = await scanner.scan(emitProgress);
+    const result = offer(await scanner.scan(emitProgress));
     lastScan = result;
     if (!appsCache) {
       appsCache = await uninstaller.listApps();
@@ -212,6 +253,7 @@ function wireIpc() {
 
   ipcMain.handle('scan:clean', async (_e, items) => {
     const { results, freedBytes } = await cleaner.clean(items, {
+      offered: offeredPaths,
       onProgress: (done, total, p) => emitProgress({ stage: 'cleaning', done, total, detail: p })
     });
     const moved = results.filter((r) => r.ok);
@@ -246,7 +288,7 @@ function wireIpc() {
   ipcMain.handle('duplicates:find', async (_e, opts) => {
     emitProgress({ stage: 'duplicates', detail: 'Scanning for duplicate files…' });
     const result = await duplicates.findDuplicates(opts || {}, emitProgress);
-    return result;
+    return offer(result);
   });
 
   ipcMain.handle('processes:list', () => processesMod.listTop());
@@ -255,7 +297,7 @@ function wireIpc() {
   ipcMain.handle('apps:list', async () => {
     if (!appsCache) appsCache = await uninstaller.listApps();
     search.buildFrom(lastScan, appsCache);
-    return appsCache;
+    return offer(appsCache);
   });
 
   ipcMain.handle('apps:inspect', async (_e, appPath) => {
@@ -263,7 +305,7 @@ function wireIpc() {
     if (!info.error) {
       // merge any leftovers not yet in the cache so search finds them
     }
-    return info;
+    return offer(info);
   });
 
   const appMetaCache = new Map();
@@ -288,6 +330,10 @@ function wireIpc() {
     for (const target of targets) {
       if (cleaner.isProtected(target.path)) {
         results.push({ path: target.path, ok: false, reason: 'Protected path.' });
+        continue;
+      }
+      if (!offeredPaths.has(path.resolve(target.path))) {
+        results.push({ path: target.path, ok: false, reason: 'Not part of this app’s inspection. Inspect the app again.' });
         continue;
       }
       try {
@@ -329,10 +375,12 @@ function wireIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('protection:status', () => protection.status());
-  ipcMain.handle('shredder:run', (_e, paths) => {
+  ipcMain.handle('shredder:run', async (_e, paths) => {
+    // Only files the user picked in our own dialog, each picked once.
+    const picked = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && pickedForShred.delete(p));
     scanning = true;
     try {
-      return shredder.shred(paths, { onProgress: emitProgress });
+      return await shredder.shred(picked, { onProgress: emitProgress });
     } finally {
       scanning = false;
     }
@@ -342,7 +390,9 @@ function wireIpc() {
       properties: ['openFile', 'multiSelections'],
       buttonLabel: 'Shred These'
     });
-    return r.canceled ? null : r.filePaths;
+    if (r.canceled) return null;
+    r.filePaths.forEach((p) => pickedForShred.add(p));
+    return r.filePaths;
   });
   ipcMain.handle('schedule:get', () => schedule.status());
   ipcMain.handle('schedule:set', (_e, { schedule, hour }) => schedule.set(schedule, hour));
@@ -401,16 +451,20 @@ function wireIpc() {
       const result = await scanner.scan(() => {}); // silent — no overlay in the main window
       lastScan = null;
       const items = result.groups.flatMap((g) => g.items).filter((i) => i.safety === 'safe');
-      const { results, freedBytes } = await cleaner.clean(items.map((i) => ({ id: i.id, path: i.path, sizeBytes: i.sizeBytes })));
-      const okCount = results.filter((r) => r.ok).length;
+      // processNames go along so the cleaner skips anything whose app is open —
+      // there is no "quit first" dialog in the menu bar.
+      const { results, freedBytes } = await cleaner.clean(items.map((i) => ({
+        id: i.id, path: i.path, sizeBytes: i.sizeBytes, processNames: i.processNames
+      })));
+      const moved = results.filter((r) => r.ok);
       cleaner.appendHistory(app.getPath('userData'), {
         at: new Date().toISOString(),
         kind: 'clean',
-        count: okCount,
+        count: moved.length,
         freedBytes,
-        paths: items.map((i) => i.path)
+        paths: moved.map((m) => m.path) // only what actually went to the Trash
       });
-      return { ok: true, freedBytes, count: okCount, skipped: results.length - okCount };
+      return { ok: true, freedBytes, count: moved.length, skipped: results.length - moved.length };
     } finally {
       scanning = false;
     }
@@ -439,7 +493,7 @@ function wireIpc() {
     return { results };
   });
 
-  ipcMain.handle('downloads:scan', () => downloads.scan());
+  ipcMain.handle('downloads:scan', async () => offer(await downloads.scan()));
   ipcMain.handle('updates:scan', (_e) => {
     scanning = true;
     try {
@@ -454,14 +508,20 @@ function wireIpc() {
     return { ok: true };
   });
 
-  ipcMain.handle('privacy:scan', () => privacy.scan());
+  ipcMain.handle('privacy:scan', async () => offer(await privacy.scan(), privacyPaths));
+  // Browser trace files (Safari History.db, Firefox places.sqlite, …) match the
+  // database-name block, so the exact files the Privacy scan reported are
+  // allowed through — and nothing else.
   ipcMain.handle('privacy:clean', (_e, items) =>
-    cleaner.clean(items, { allowPaths: privacy.SAFARI_ALLOW }));
+    cleaner.clean(items, {
+      offered: privacyPaths,
+      allowPaths: [...privacy.SAFARI_ALLOW, ...privacyPaths.keys()]
+    }));
 
   ipcMain.handle('similar:scan', async () => {
     scanning = true;
     try {
-      return await similar.scan({ onProgress: emitProgress });
+      return offer(await similar.scan({ onProgress: emitProgress }));
     } finally {
       scanning = false;
     }
@@ -478,6 +538,15 @@ function wireIpc() {
 }
 
 app.whenReady().then(() => {
+  // `npm start` runs inside the stock Electron.app, so the Dock would show the
+  // Electron atom. Packaged builds get the real icon from the .icns; dev runs
+  // borrow it here.
+  // nativeImage can't decode .icns directly, so ask Quick Look for a render.
+  if (!app.isPackaged && app.dock) {
+    nativeImage.createThumbnailFromPath(path.join(__dirname, '..', '..', 'build', 'icon.icns'), { width: 512, height: 512 })
+      .then((icon) => { if (!icon.isEmpty()) app.dock.setIcon(icon); })
+      .catch(() => { /* keep Electron's icon in dev */ });
+  }
   autoUpdaterRef = setupAutoUpdater();
 
   app.on('second-instance', (_e, argv) => {
