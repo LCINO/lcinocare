@@ -1,37 +1,38 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- A · Glossy MacBook with a heartbeat on screen, on a magenta squircle -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3be3c4"/>
-      <stop offset="0.55" stop-color="#12b5a0"/>
-      <stop offset="1" stop-color="#0a7d8f"/>
+    <linearGradient id="bg" x1="140" y1="80" x2="884" y2="944" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff5fd2"/><stop offset=".55" stop-color="#c41fbf"/><stop offset="1" stop-color="#5a0a8c"/>
     </linearGradient>
-    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.65">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    <radialGradient id="glow" cx="50%" cy="38%" r="55%">
+      <stop stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="lid" x1="260" y1="270" x2="760" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/><stop offset="1" stop-color="#ead9f5"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="300" y1="310" x2="720" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2a0846"/><stop offset="1" stop-color="#14001f"/>
+    </linearGradient>
+    <linearGradient id="base" x1="200" y1="650" x2="820" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f6eefc"/><stop offset="1" stop-color="#cdb6e0"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="330" y1="0" x2="690" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff7ae0"/><stop offset="1" stop-color="#ffd0f4"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#2a0040" flood-opacity=".45"/>
+    </filter>
+    <filter id="neon"><feGaussianBlur stdDeviation="7"/></filter>
   </defs>
-
-  <!-- macOS-style rounded square -->
-  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#bg)"/>
-  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#glow)"/>
-
-  <!-- top glass sheen -->
-  <path d="M64 300 C 64 170 170 64 300 64 L 724 64 C 854 64 960 170 960 300 L 960 340 C 780 260 620 236 512 236 C 404 236 244 260 64 340 Z"
-        fill="url(#gloss)" opacity="0.55"/>
-
-  <!-- heart -->
-  <path d="M512 830 C 350 700 240 600 240 460 C 240 356 320 272 416 272 C 458 272 492 288 512 314 C 532 288 566 272 608 272 C 704 272 784 356 784 460 C 784 600 674 700 512 830 Z"
-        fill="#ffffff" opacity="0.96"/>
-
-  <!-- pulse line -->
-  <path d="M300 480 L 400 480 L 448 372 L 544 592 L 600 452 L 632 480 L 724 480"
-        fill="none" stroke="#12b5a0" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- bottom inner shadow hint -->
-  <path d="M64 760 C 200 860 400 900 512 900 C 624 900 824 860 960 760 L 960 756 C 960 844 888 916 800 916 L 224 916 C 136 916 64 844 64 756 Z"
-        fill="#000000" opacity="0.08"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
+  <path d="M160 300 C 300 170 724 170 864 300 C 724 222 300 222 160 300 Z" fill="#fff" opacity=".18"/>
+  <g filter="url(#soft)">
+    <rect x="262" y="270" width="500" height="352" rx="34" fill="url(#lid)"/>
+    <rect x="292" y="300" width="440" height="292" rx="16" fill="url(#screen)"/>
+    <path d="M196 642 h632 a14 14 0 0 1 14 14 v8 c0 26 -22 46 -48 46 H230 c-26 0 -48 -20 -48 -46 v-8 a14 14 0 0 1 14 -14 z" fill="url(#base)"/>
+    <rect x="452" y="642" width="120" height="16" rx="8" fill="#b79acd"/>
+  </g>
+  <path d="M330 450 h96 l30 -62 l48 132 l38 -96 l26 26 h102" stroke="#ff4fd2" stroke-width="30" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#neon)" opacity=".8"/>
+  <path d="M330 450 h96 l30 -62 l48 132 l38 -96 l26 26 h102" stroke="url(#pulse)" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
