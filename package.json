@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "scan": "node src/main/scanner.js --cli",
+    "test": "node --test",
     "dist": "electron-builder --mac --arm64"
   },
   "build": {
