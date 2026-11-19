@@ -109,6 +109,47 @@ body {
 
 #app { display: flex; height: 100vh; }
 
+/* ── Window dragging ────────────────────────────────────────────────────────
+   The title bar is hidden, so the window moves only by grabbing areas marked
+   -webkit-app-region: drag. #topbar used to be the only one, but every module
+   landing hides it — those pages could not be dragged at all, and the drag
+   area jumped around as views changed. This strip is fixed across the top of
+   the panel on every view and never changes. It takes no clicks itself
+   (pointer-events: none); controls that reach into it opt out with no-drag. */
+#drag-strip {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 44px;
+  -webkit-app-region: drag;
+  pointer-events: none;
+  z-index: 0;
+}
+button, input, select, textarea, a, [contenteditable="true"], .nav-item { -webkit-app-region: no-drag; }
+
+/* ── Overhang window (real app only — see OVERHANG in main.js) ──────────────
+   The window is transparent and 96px taller than the panel we draw, leaving
+   an empty strip at the bottom for the round action button to hang into
+   (48px for the lower half of the 96px button, 48px more for its progress
+   ring and glow — anything past the window edge is cut off in a hard, flat
+   line). In full screen there is no strip and the panel fills the screen. */
+body.overhang { --overhang: 96px; background: transparent; }
+body.overhang.fullscreen { --overhang: 0px; }
+body.overhang #app {
+  height: calc(100vh - var(--overhang));
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+}
+body.overhang.fullscreen #app { border-radius: 0; }
+/* Overlays dim only the panel, never the empty strip below it. */
+body.overhang #modal-backdrop,
+body.overhang #scan-overlay,
+body.overhang #onboarding { bottom: var(--overhang); border-radius: 12px; }
+body.overhang.fullscreen #modal-backdrop,
+body.overhang.fullscreen #scan-overlay,
+body.overhang.fullscreen #onboarding { border-radius: 0; }
+body.overhang #toast-holder { bottom: calc(18px + var(--overhang)); }
+body.overhang #working-pill { bottom: calc(120px + var(--overhang)); }
+
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
 #sidebar {
@@ -747,6 +788,9 @@ table.tbl tbody tr:hover { background: var(--row-hover); }
   box-shadow: 0 3px 10px rgba(0, 0, 0, .16), inset 0 1px 1px rgba(255, 255, 255, .35);
 }
 .app-ico img { width: 36px; height: 36px; }
+/* A real app icon already has its own shape and shadow; show it bare. */
+.app-ico.has-img { background: none; box-shadow: none; border-radius: 0; overflow: visible; }
+.app-ico.has-img img { width: 42px; height: 42px; }
 .app-row .info { flex: 1; min-width: 0; }
 .app-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-ver { color: var(--text-3); font-weight: 500; font-size: 11px; }

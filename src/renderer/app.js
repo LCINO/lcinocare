@@ -756,7 +756,7 @@ const STAGE_CARD = {
   duplicates: 'clutter', nodemodules: 'clutter', largefiles: 'clutter',
   updates: 'applications', privacy: 'protection'
 };
-const smartScan = { active: false, phase: null, detail: '' };
+const smartScan = { active: false, phase: null, detail: '', completed: [], pct: 0, cancelled: false };
 
 function smartCardSpec(id) {
   const specs = {
@@ -769,36 +769,55 @@ function smartCardSpec(id) {
   return specs[id];
 }
 
+// The order Smart Care works through its checks. Phases only ever move
+// forward, so a late scan stage (e.g. measuring the Trash) never sends the
+// focus back to a card that already finished.
+const SMART_ORDER = ['cleanup', 'clutter', 'protection', 'performance', 'applications'];
+const SMART_LOOKING = {
+  cleanup: 'Looking for junk…',
+  clutter: 'Looking for clutter…',
+  protection: 'Checking safety zones…',
+  performance: 'Checking what runs at login…',
+  applications: 'Looking for updates…'
+};
+
+// Live Smart Care scan, laid out like a story: finished checks sit compact on
+// the left of the top row, the check running now takes the rest of that row
+// in focus, and the ones still to come wait below, softly blurred.
 function renderSmartScanState() {
   const view = $('#view-smart');
   document.body.classList.remove('landing-mode');
   document.body.classList.add('rail');
-  const order = ['cleanup', 'protection', 'performance', 'applications', 'clutter'];
-  const cards = order.map((id) => {
+  const doneIds = SMART_ORDER.filter((id) => smartScan.completed.includes(id));
+  const pendingIds = SMART_ORDER.filter((id) => id !== smartScan.phase && !smartScan.completed.includes(id));
+
+  const doneCard = (id) => {
     const spec = smartCardSpec(id);
-    const isScanning = smartScan.phase === id;
-    const done = smartScanDone(id);
-    const wide = id === 'applications' || id === 'clutter' || isScanning;
-    let inner;
-    if (isScanning) {
-      inner = `
-        <div class="sc-scan-head">Looking${smartScan.phase === 'cleanup' ? ' for junk' : smartScan.phase === 'clutter' ? ' for clutter' : smartScan.phase === 'applications' ? ' for updates' : ''}…</div>
-        <div class="sc-scan-art">${spec.art}</div>
-        <div class="sc-ticker">${esc(smartScan.detail || 'Preparing…')}</div>`;
-    } else if (done) {
-      const r = smartScan.results[id];
-      inner = `
+    return `
+      <div class="sc-card ${spec.cls} done compact" data-card="${id}">
         <div class="sc-card-top">${spec.top}</div>
         <div class="sc-art">${spec.art}</div>
-        <div class="sc-stat">${r}</div>`;
-    } else {
-      inner = `
+        <div class="sc-stat">${smartScan.results[id] || 'Checked ✓'}</div>
+      </div>`;
+  };
+  const activeCard = (id) => {
+    const spec = smartCardSpec(id);
+    return `
+      <div class="sc-card ${spec.cls} scanning focus" data-card="${id}">
+        <div class="sc-focus-title">${SMART_LOOKING[id]}</div>
+        <div class="sc-art">${spec.art}</div>
+        <div class="sc-ticker">${esc(smartScan.detail || 'Getting ready')}</div>
+      </div>`;
+  };
+  const pendingCard = (id) => {
+    const spec = smartCardSpec(id);
+    return `
+      <div class="sc-card ${spec.cls} pending" data-card="${id}">
         <div class="sc-card-top">${spec.top}</div>
-        <div class="sc-art" style="opacity:.45">${spec.art}</div>
-        <div class="sc-stat" style="opacity:.4">Waiting…</div>`;
-    }
-    return `<div class="sc-card ${spec.cls} ${wide ? 'wide' : ''} ${isScanning ? 'scanning' : ''} ${done ? 'done' : ''} ${!isScanning && !done ? 'pending' : ''}" data-card="${id}">${inner}</div>`;
-  }).join('');
+        <div class="sc-art">${spec.art}</div>
+        <div class="sc-stat">Waiting…</div>
+      </div>`;
+  };
 
   view.innerHTML = `
     <div class="sc-top">
@@ -808,11 +827,36 @@ function renderSmartScanState() {
     </div>
     <div class="sc-headline" id="smart-scan-headline">${esc(smartScan.headline || 'Scanning your Mac…')}</div>
     <div class="sc-sheet">
-      <div class="sc-grid">${cards}</div>
-      <button class="sc-run stop" id="sc-stop">Stop</button>
+      <div class="sc-flow">
+        <div class="sc-flow-top">${doneIds.map(doneCard).join('')}${smartScan.phase ? activeCard(smartScan.phase) : ''}</div>
+        ${pendingIds.length ? `<div class="sc-flow-bottom">${pendingIds.map(pendingCard).join('')}</div>` : ''}
+      </div>
+      <button class="sc-run stop running" id="sc-stop" style="--p:${Math.max(1, smartScan.pct || 0)}">Stop</button>
     </div>`;
 
-  $('#sc-stop').onclick = () => window.lcino.scanCancel();
+  $('#sc-stop').onclick = () => {
+    if (smartScan.cancelled) return;
+    smartScan.cancelled = true;
+    sfx('stop');
+    window.lcino.scanCancel();
+  };
+}
+
+// Move the Smart Care focus forward to `id` (never backwards). The card that
+// was in focus joins the finished row.
+function advanceSmartPhase(id) {
+  const cur = SMART_ORDER.indexOf(smartScan.phase);
+  const next = SMART_ORDER.indexOf(id);
+  if (next <= cur) return false;
+  if (smartScan.phase && !smartScan.completed.includes(smartScan.phase)) smartScan.completed.push(smartScan.phase);
+  smartScan.phase = id;
+  return true;
+}
+
+function setSmartProgress(pct) {
+  smartScan.pct = Math.max(smartScan.pct || 0, pct); // the ring only moves forward
+  const stop = $('#sc-stop');
+  if (stop) stop.style.setProperty('--p', smartScan.pct);
 }
 
 function smartScanDone(id) {
@@ -823,31 +867,54 @@ function smartScanDone(id) {
 async function runSmartScanFlow() {
   smartScan.active = true;
   smartScan.results = {};
+  smartScan.completed = [];
+  smartScan.cancelled = false;
+  smartScan.pct = 0;
   smartScan.phase = 'cleanup';
-  smartScan.detail = 'Preparing…';
+  smartScan.detail = 'Getting ready';
   smartScan.headline = 'Scanning your Mac…';
   state.scanning = true;
   state.selectedClean.clear();
   dl.selected.clear();
+  sfx('start');
+
+  // A quick check still gets a moment in focus, so each card is seen working.
+  const atLeast = (ms, work) => Promise.all([work, sleep(ms)]).then(([v]) => v);
+  const runPhase = async (id, detail, pct, work) => {
+    if (smartScan.cancelled) return null;
+    advanceSmartPhase(id);
+    smartScan.detail = detail;
+    renderSmartScanState();
+    setSmartProgress(pct - 8);
+    const v = await atLeast(900, work().catch(() => null));
+    setSmartProgress(pct);
+    return v;
+  };
 
   // Smart Care results view in scan mode
   showView('smart');
-  renderSmartScanState(); // overrides the landing render with the live grid
+  renderSmartScanState(); // overrides the landing render with the live cards
+
+  // 1–2) the disk scan feeds Cleanup, then My Clutter (0–60% of the ring)
   setScanProgressSink((ev) => {
-    const card = STAGE_CARD[ev.stage] || (ev.stage === 'updates' ? 'applications' : null);
+    const card = STAGE_CARD[ev.stage];
     if (!card) return;
-    smartScan.detail = ev.detail || smartScan.detail;
-    if (smartScan.phase !== card) {
-      smartScan.phase = card;
+    const prog = scanStageProgress(ev); // plain-English text, not raw paths
+    if (prog) setSmartProgress(prog.pct * 0.6);
+    const text = (prog && prog.text) || ev.detail;
+    if (advanceSmartPhase(card)) {
+      smartScan.detail = text || smartScan.detail;
       renderSmartScanState();
-    } else {
+    } else if (card === smartScan.phase && text) {
+      // a late stage of an earlier card (e.g. the Trash) doesn't relabel this one
+      smartScan.detail = text;
       const tick = document.querySelector('.sc-card.scanning .sc-ticker');
-      if (tick) tick.textContent = smartScan.detail;
+      if (tick) tick.textContent = text;
     }
   });
-
   const r = await window.lcino.scan();
   setScanProgressSink(null);
+  if (r.result && r.result.cancelled) smartScan.cancelled = true;
 
   if (r.ok && r.result) {
     state.scan = r.result;
@@ -855,16 +922,27 @@ async function runSmartScanFlow() {
     smartScan.results.clutter = `${(state.scan.groups.find((g) => g.id === 'duplicate-copies') || { items: [] }).items.length} duplicate bundles`;
   }
 
-  // Applications phase — real update-feed check
-  if (!(r.ok && r.result && r.result.cancelled)) {
-    smartScan.phase = 'applications';
-    smartScan.detail = 'Checking update feeds…';
-    renderSmartScanState();
-    const ur = await window.lcino.updatesScan().catch(() => null);
-    if (ur && ur.ok) state.updatesApps = ur.apps;
-    smartScan.results.applications = state.updatesApps ? `${state.updatesApps.length} apps` : '—';
+  // 3) Protection — the real security state and locked zones
+  const prot = await runPhase('protection', 'Reading XProtect, FileVault and firewall', 70,
+    () => Promise.all([window.lcino.protectedList(), window.lcino.protectionStatus()]));
+  if (prot) smartScan.results.protection = 'Always protected';
+
+  // 4) Performance — what launches at login and in the background
+  const startup = await runPhase('performance', 'Listing login and background items', 80, () => window.lcino.startupList());
+  if (startup) {
+    const n = (Array.isArray(startup.loginItems) ? startup.loginItems.length : 0) + (startup.agents?.length || 0);
+    smartScan.results.performance = `${n} items`;
   }
 
+  // 5) Applications — real update-feed check
+  const ur = await runPhase('applications', 'Checking update feeds', 96, () => window.lcino.updatesScan());
+  if (ur && ur.ok) state.updatesApps = ur.apps;
+  if (ur) smartScan.results.applications = state.updatesApps ? `${state.updatesApps.length} apps` : '—';
+
+  if (!smartScan.cancelled) {
+    setSmartProgress(100);
+    sfx('done');
+  }
   smartScan.active = false;
   state.scanning = false;
   setScanProgressSink(null);
@@ -961,7 +1039,7 @@ async function renderSmart() {
 function landingHtml(mod) {
   const t = mod.theme;
   return `
-    <div class="module-landing" style="--m-from:${t.from};--m-to:${t.to};--m-deep:${t.deep};--m-pill:${t.pill};--m-scan:${t.scan};--m-scan-to:${t.scanTo};--m-tile-a:${t.tile[0]};--m-tile-b:${t.tile[1]}">
+    <div class="module-landing" data-mod="${esc(mod.id)}" style="--m-from:${t.from};--m-to:${t.to};--m-deep:${t.deep};--m-pill:${t.pill};--m-scan:${t.scan};--m-scan-to:${t.scanTo};--m-tile-a:${t.tile[0]};--m-tile-b:${t.tile[1]}">
       <div class="ml-art">${mod.art()}</div>
       <div class="ml-panel">
         <h1 class="ml-title">${esc(mod.title)}</h1>
@@ -977,6 +1055,55 @@ function landingHtml(mod) {
       </div>
       ${mod.scan ? '<button class="ml-scan" data-ml-scan>Scan</button>' : ''}
     </div>`;
+}
+
+// ── sound cues ─────────────────────────────────────────────────────────────
+// Soft synthesized cues, no audio files: a light tick when a scan starts, a
+// falling note when it is stopped, and a rising chime when it finishes.
+// Sound is a nicety — any failure is silent.
+let audioCtx = null;
+function sfx(kind) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx;
+    const t0 = ctx.currentTime;
+    const note = (freq, start, dur, gain = 0.08, type = 'sine', endFreq = null) => {
+      const osc = ctx.createOscillator();
+      const amp = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0 + start);
+      if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + start + dur);
+      amp.gain.setValueAtTime(0.0001, t0 + start);
+      amp.gain.exponentialRampToValueAtTime(gain, t0 + start + 0.012);
+      amp.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      osc.connect(amp).connect(ctx.destination);
+      osc.start(t0 + start);
+      osc.stop(t0 + start + dur + 0.02);
+    };
+    if (kind === 'start') { note(880, 0, 0.09, 0.07, 'triangle'); note(1320, 0.06, 0.14, 0.05); }
+    else if (kind === 'stop') { note(660, 0, 0.24, 0.07, 'sine', 330); }
+    else if (kind === 'done') { note(784, 0, 0.35, 0.07); note(1175, 0.14, 0.5, 0.06); note(1568, 0.28, 0.6, 0.04); }
+  } catch { /* sound is optional */ }
+}
+
+// Where each scan stage sits on the Stop button's progress ring (0–100), and
+// the plain-English line shown under the heading while it runs. The 'sizes'
+// stage reports done/total and fills its own span of the ring.
+const SCAN_STAGES = {
+  caches:      { from: 2,  to: 8,  text: 'Looking through app caches' },
+  sizes:       { from: 8,  to: 55, text: 'Measuring what each folder holds' },
+  appdata:     { from: 55, to: 62, text: 'Checking app data folders' },
+  duplicates:  { from: 62, to: 70, text: 'Spotting duplicate copies' },
+  nodemodules: { from: 70, to: 80, text: 'Finding developer leftovers' },
+  largefiles:  { from: 80, to: 92, text: 'Finding large files' },
+  trash:       { from: 92, to: 99, text: 'Measuring the Trash' }
+};
+
+function scanStageProgress(ev) {
+  const s = SCAN_STAGES[ev.stage];
+  if (!s) return null;
+  const frac = ev.total ? Math.min(1, (ev.done || 0) / ev.total) : 0;
+  return { pct: s.from + (s.to - s.from) * frac, text: s.text };
 }
 
 function defaultLandingScan(mod) {
@@ -995,13 +1122,24 @@ function defaultLandingScan(mod) {
     stage.classList.add('scanning');
     const stateEl = document.createElement('div');
     stateEl.className = 'ml-scanstate';
-    stateEl.innerHTML = `<div class="ml-scan-heading">${HEADINGS[mod.id] || 'Scanning…'}</div><div class="ml-ticker">Preparing…</div>`;
+    stateEl.innerHTML = `<div class="ml-scan-heading">${HEADINGS[mod.id] || 'Scanning…'}</div><div class="ml-ticker">Getting ready</div>`;
     stage.appendChild(stateEl);
+    sfx('start');
     const scanBtn = view.querySelector('[data-ml-scan]');
-    if (scanBtn) { scanBtn.textContent = 'Stop'; scanBtn.onclick = () => window.lcino.scanCancel(); }
+    if (scanBtn) {
+      scanBtn.textContent = 'Stop';
+      scanBtn.classList.add('running');
+      scanBtn.style.setProperty('--p', 1);
+      scanBtn.onclick = () => { sfx('stop'); window.lcino.scanCancel(); };
+    }
+    let shown = 1; // the ring only ever moves forward
     setScanProgressSink((ev) => {
+      const prog = scanStageProgress(ev);
+      if (!prog) return;
       const tick = view.querySelector('.ml-ticker');
-      if (tick && ev.detail) tick.textContent = ev.detail;
+      if (tick) tick.textContent = prog.text;
+      shown = Math.max(shown, prog.pct);
+      if (scanBtn) scanBtn.style.setProperty('--p', shown);
     });
 
     const r = await window.lcino.scan();
@@ -1009,6 +1147,7 @@ function defaultLandingScan(mod) {
     state.scanning = false;
     if (r.ok && r.result) state.scan = r.result;
     if (r.result && r.result.cancelled) { showView(mod.id); return; } // back to the idle landing
+    if (r.ok) sfx('done');
     showView(mod.scanTo || 'smart');
   };
 }
@@ -1281,6 +1420,25 @@ function cmMenuHtml(id, options, current) {
     </div>`;
 }
 
+// One line per junk group, shown above its item list. (Item-level text lives
+// in each row's detail — never borrow the first item's text for the group.)
+const GROUP_DESC = {
+  'browser-caches': 'Web and app caches. They rebuild on their own as you use each app.',
+  'leftover-installers': 'Update installers apps downloaded and never cleaned up. The installed apps are not touched.',
+  'app-data-bloat': 'Large app data that can be re-downloaded. Review each one — some apps are using it right now.',
+  'dev-caches': 'Package and tool caches. Your projects are untouched; tools download again when needed.',
+  'mail-attachments': 'Attachments Mail saved to disk. The originals stay on the mail server.',
+  'logs': 'Diagnostic logs. Apps write fresh ones as they run.',
+  'duplicate-copies': 'Identical copies of the same bundle sitting side by side. One copy is kept.'
+};
+
+// "Safe" items rebuild themselves; "Review" items deserve a look before they go.
+function riskBadge(item) {
+  return item.safety === 'safe'
+    ? '<span class="mi-risk safe" title="Rebuilt automatically by its app">Safe</span>'
+    : '<span class="mi-risk review" title="Look before deleting — re-downloading may take time, or the app may be using it">Review</span>';
+}
+
 async function renderCleanupManager() {
   const view = $('#view-cleanup-manager');
   if (!state.scan) {
@@ -1350,6 +1508,7 @@ async function renderCleanupManager() {
         <input type="checkbox" class="cm-check" data-path="${esc(item.path)}" ${state.selectedClean.has(item.path) ? 'checked' : ''} />
         ${mgrTile(item.label, activeGroup.color)}
         <div class="mi-info"><div class="mi-name">${esc(item.label)}</div></div>
+        ${riskBadge(item)}
         <button class="mi-sparkle" data-reveal="${esc(item.path)}" title="Show in Finder">${Icons.glyph('folder', 15, 'currentColor')}</button>
         <div class="mi-size">${fmtBytes(item.sizeBytes)}</div>
         <button class="mi-chev" data-detail="cmd-${esc(item.id || item.path)}">›</button>
@@ -1369,7 +1528,7 @@ async function renderCleanupManager() {
       : activeGroup.items.some((i) => state.selectedClean.has(i.path)) ? 'Smartly' : 'None';
     rightHtml = `
       <div class="mgr-pane-title">${esc(activeGroup.label)}</div>
-      <div class="mgr-pane-desc">${esc(activeGroup.items[0].whatItIs || '')}</div>
+      <div class="mgr-pane-desc">${esc(GROUP_DESC[activeGroup.id] || '')}</div>
       <div class="mgr-controls">
         ${cmMenuHtml('cm-select', selOptions, currentSel)}
         <button class="mgr-select" id="cm-sort">Sort by: <b>${cm.sort === 'size' ? 'Size' : 'Name'}</b> <svg width="10" height="7" viewBox="0 0 10 7" style="color:var(--mgr-accent)"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
@@ -1388,7 +1547,7 @@ async function renderCleanupManager() {
         <div class="mgr-bar">
           <div class="mb-info">${selItems.length ? `${selItems.length} Item${selItems.length > 1 ? 's' : ''} Selected <span>|</span> ${fmtBytes(selBytes)}` : 'No Items Selected'}</div>
           <div class="mb-spacer"></div>
-          <button class="mgr-done" id="cm-done" ${cm.pane === 'trash' || !selItems.length ? 'disabled' : ''}>Done</button>
+          <button class="mgr-done" id="cm-done" ${cm.pane === 'trash' || !selItems.length ? 'disabled' : ''}>Move to Trash</button>
         </div>
       </div>
     </div>`;
@@ -1423,8 +1582,10 @@ async function renderCleanupManager() {
       renderCleanupManager();
     });
   }
-  const sortBtn = $('#cm-sort');
-  if (sortBtn) sortBtn.onclick = () => { cm.sort = cm.sort === 'size' ? 'name' : 'size'; renderCleanupManager(); };
+  wireDropdown($('#cm-sort'), { size: 'Size', name: 'Name' }, cm.sort === 'name' ? 'name' : 'size', (key) => {
+    cm.sort = key;
+    renderCleanupManager();
+  });
 
   const emptyBtn = $('#cm-empty-trash');
   if (emptyBtn) emptyBtn.onclick = () => {
@@ -2218,6 +2379,45 @@ function packBubbles(items, box) {
 }
 
 
+// A real dropdown for "Sort by:"-style buttons: opens a menu under the button,
+// ticks the current choice, closes on pick, outside click or Escape.
+// options: { key: 'Label' }. onPick(key) runs only when the choice changes.
+function wireDropdown(btn, options, current, onPick) {
+  if (!btn) return;
+  const host = btn.parentElement;
+  host.style.position = 'relative';
+  let menu = host.querySelector(`.mgr-menu[data-for="${btn.id}"]`);
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.className = 'mgr-menu hidden';
+    menu.dataset.for = btn.id;
+    menu.style.left = 'auto';
+    menu.style.right = '0';
+    host.appendChild(menu);
+  }
+  menu.innerHTML = Object.entries(options).map(([key, label]) =>
+    `<button data-key="${esc(key)}">${key === current ? '✓ ' : '<span style="visibility:hidden">✓ </span>'}${esc(label)}</button>`).join('');
+  const close = () => {
+    menu.classList.add('hidden');
+    document.removeEventListener('click', onOutside, true);
+    document.removeEventListener('keydown', onKey, true);
+  };
+  const onOutside = (e) => { if (!menu.contains(e.target) && !btn.contains(e.target)) close(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (!menu.classList.contains('hidden')) return close();
+    menu.classList.remove('hidden');
+    document.addEventListener('click', onOutside, true);
+    document.addEventListener('keydown', onKey, true);
+  };
+  menu.querySelectorAll('[data-key]').forEach((o) => o.onclick = (e) => {
+    e.stopPropagation();
+    close();
+    if (o.dataset.key !== current) onPick(o.dataset.key);
+  });
+}
+
 // Space Lens location selector (Home / Macintosh HD / iCloud Drive / volumes / Choose Folder…)
 async function wireClutterLocation(view) {
   const btn = view.querySelector('#clutter-loc');
@@ -2601,6 +2801,19 @@ function appInitialTile(name) {
   return `<span class="app-ico" style="background:linear-gradient(145deg, hsl(${hue} 78% 62%), hsl(${(hue + 24) % 360} 74% 44%))">${esc(name.charAt(0).toUpperCase())}</span>`;
 }
 
+const APP_SORTS = { name: 'Name', size: 'Size', date: 'Install Date' };
+
+// Vendor name from a bundle id: "com.google.Chrome" → "Google".
+const VENDOR_NAMES = { apple: 'Apple', google: 'Google', microsoft: 'Microsoft', adobe: 'Adobe', jetbrains: 'JetBrains', mozilla: 'Mozilla', anthropic: 'Anthropic' };
+const BUNDLE_TLDS = new Set(['com', 'org', 'net', 'io', 'app', 'dev', 'co', 'me', 'ai', 'us', 'de', 'uk', 'ru', 'cn', 'jp']);
+function appVendor(a) {
+  if (!a || !a.bundleId) return null;
+  const parts = a.bundleId.split('.');
+  const raw = (BUNDLE_TLDS.has(parts[0].toLowerCase()) && parts[1] ? parts[1] : parts[0]).toLowerCase();
+  if (!raw) return null;
+  return VENDOR_NAMES[raw] || raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 async function renderApps() {
   const view = $('#view-apps');
   if (!state.apps) {
@@ -2612,8 +2825,13 @@ async function renderApps() {
   const insp = state.inspected;
   view.innerHTML = `
     <div class="card">
-      <h3>Installed applications — ${state.apps.length}</h3>
+      <div class="apps-head">
+        <h3>Installed applications — ${state.apps.length}</h3>
+        <button class="mgr-select" id="apps-sort">Sort by: <b>${APP_SORTS[state.appSort || 'name']}</b> <svg width="10" height="7" viewBox="0 0 10 7"><path d="M1 1.5l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+      </div>
       <div class="sub">Icons, sizes and install dates load in as they are measured. Click <b>Inspect</b> to see whether an app is running and every leftover it left in Library folders.</div>
+      <div class="apps-layout">
+      <nav class="apps-filters" id="apps-filters"></nav>
       <div id="app-list">
         ${state.apps.map((a) => `
           <div class="app-row" data-app="${esc(a.path)}">
@@ -2626,9 +2844,94 @@ async function renderApps() {
             <button class="btn small" data-inspect="${esc(a.path)}">Inspect</button>
           </div>`).join('')}
       </div>
+      </div>
     </div>
     <div id="inspect-holder">${insp ? inspectHtml(insp) : ''}</div>
   `;
+
+  // Sort cycles Name → Size → Date. Rows are reordered in place, so icons and
+  // sizes that already loaded stay put; sizes/dates still loading sort last.
+  const sortRows = () => {
+    const key = state.appSort || 'name';
+    const list = $('#app-list');
+    if (!list) return;
+    const byPath = new Map(state.apps.map((a) => [a.path, a]));
+    const rows = [...list.querySelectorAll('.app-row')];
+    const val = (row) => byPath.get(row.dataset.app) || {};
+    rows.sort((ra, rb) => {
+      const a = val(ra), b = val(rb);
+      if (key === 'size') return (b.sizeBytes ?? -1) - (a.sizeBytes ?? -1);
+      if (key === 'date') return (b.addedMs ?? -1) - (a.addedMs ?? -1);
+      return String(a.name).localeCompare(String(b.name));
+    });
+    rows.forEach((r) => list.appendChild(r));
+  };
+  const wireAppSort = () => wireDropdown($('#apps-sort'), APP_SORTS, state.appSort || 'name', (key) => {
+    state.appSort = key;
+    $('#apps-sort b').textContent = APP_SORTS[key];
+    sortRows();
+    wireAppSort(); // re-tick the new choice
+  });
+  wireAppSort();
+  sortRows();
+
+  // Left-hand filters (like the Uninstaller's sidebar): every app, or grouped
+  // by store, vendor and install location. Store and vendor fill in once the
+  // metadata pass has read each app's bundle id and App Store receipt.
+  const filter = () => state.appFilter || 'all';
+  const matches = (a, f) => {
+    if (f === 'all') return true;
+    const [kind, val] = f.split(':');
+    if (kind === 'store') return val === 'mas' ? a.appStore === true : a.appStore === false;
+    if (kind === 'vendor') return appVendor(a) === val;
+    if (kind === 'loc') return a.location === val;
+    return true;
+  };
+  const applyFilter = () => {
+    const byPath = new Map(state.apps.map((a) => [a.path, a]));
+    $('#app-list').querySelectorAll('.app-row').forEach((row) => {
+      row.classList.toggle('hidden', !matches(byPath.get(row.dataset.app) || {}, filter()));
+    });
+  };
+  const renderFilters = (metaReady) => {
+    const nav = $('#apps-filters');
+    if (!nav) return;
+    const count = (f) => state.apps.filter((a) => matches(a, f)).length;
+    const item = (f, label) => {
+      const n = count(f);
+      return n ? `<button class="af-item ${filter() === f ? 'active' : ''}" data-filter="${esc(f)}"><span>${esc(label)}</span><span class="af-count">${n}</span></button>` : '';
+    };
+    const vendors = [...new Set(state.apps.map(appVendor).filter(Boolean))]
+      .map((v) => ({ v, n: count(`vendor:${v}`) }))
+      .sort((x, y) => y.n - x.n || x.v.localeCompare(y.v));
+    const locations = [...new Set(state.apps.map((a) => a.location).filter(Boolean))];
+    nav.innerHTML = `
+      ${item('all', 'All Applications')}
+      <div class="af-head">Stores</div>
+      ${metaReady ? item('store:mas', 'App Store') + item('store:other', 'Other') : '<div class="af-wait">Reading…</div>'}
+      <div class="af-head">Vendors</div>
+      ${metaReady ? vendors.map(({ v }) => item(`vendor:${v}`, v)).join('') : '<div class="af-wait">Reading…</div>'}
+      <div class="af-head">Location</div>
+      ${locations.map((l) => item(`loc:${l}`, l)).join('')}`;
+    nav.querySelectorAll('[data-filter]').forEach((b) => b.onclick = () => {
+      state.appFilter = b.dataset.filter;
+      renderFilters(metaReady);
+      applyFilter();
+    });
+  };
+  renderFilters(false);
+  applyFilter();
+
+  // Inspect works right away — it no longer waits for every size to load.
+  view.querySelectorAll('[data-inspect]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = 'Measuring…';
+      state.inspected = await window.lcino.inspectApp(b.dataset.inspect);
+      renderApps();
+      const holder = $('#inspect-holder');
+      if (holder) holder.scrollIntoView({ behavior: 'smooth' });
+    };
+  });
 
   // 1) fast metadata: real icon, version, install date (parallel, gentle)
   const metaJobs = [...state.apps];
@@ -2642,13 +2945,21 @@ async function renderApps() {
         if (!row) continue;
         if (meta.icon) {
           const ico = row.querySelector('.app-ico');
-          if (ico) ico.innerHTML = `<img src="${meta.icon}" alt="">`;
+          if (ico) {
+            // The real icon replaces the coloured letter tile entirely — no tile behind it.
+            ico.removeAttribute('style');
+            ico.classList.add('has-img');
+            ico.innerHTML = `<img src="${meta.icon}" alt="">`;
+          }
         }
         if (meta.version) {
           const ver = row.querySelector(`[data-ver="${CSS.escape(app.path)}"]`);
           if (ver) ver.textContent = `v${meta.version}`;
         }
+        app.bundleId = meta.bundleId || null;
+        app.appStore = !!meta.appStore;
         if (meta.addedMs) {
+          app.addedMs = meta.addedMs;
           const added = row.querySelector(`[data-added="${CSS.escape(app.path)}"]`);
           if (added) added.textContent = `· Added ${fmtDate(meta.addedMs)}`;
         }
@@ -2656,6 +2967,8 @@ async function renderApps() {
     }
   });
   await Promise.all(metaWorkers);
+  if (state.appSort === 'date') sortRows();
+  if (currentView === 'apps') { renderFilters(true); applyFilter(); }
 
   // 2) sizes (du — slower, fills in progressively)
   const sizeJobs = [...state.apps];
@@ -2666,22 +2979,14 @@ async function renderApps() {
       try {
         const sizeBytes = await window.lcino.appSize(app.path);
         if (sizeBytes == null) continue;
+        app.sizeBytes = sizeBytes;
         const cell = view.querySelector(`[data-size="${CSS.escape(app.path)}"]`);
         if (cell) cell.textContent = fmtBytes(sizeBytes);
       } catch { /* skip */ }
     }
   });
   await Promise.all(sizeWorkers);
-
-  view.querySelectorAll('[data-inspect]').forEach((b) => {
-    b.onclick = async () => {
-      b.disabled = true; b.textContent = 'Measuring…';
-      state.inspected = await window.lcino.inspectApp(b.dataset.inspect);
-      renderApps();
-      const holder = $('#inspect-holder');
-      if (holder) holder.scrollIntoView({ behavior: 'smooth' });
-    };
-  });
+  if (state.appSort === 'size') sortRows();
 
   const bindInspect = () => {
     const holder = $('#inspect-holder');
@@ -2718,7 +3023,7 @@ async function renderApps() {
 
 function inspectHtml(insp) {
   const headIcon = insp.icon
-    ? `<span class="app-ico"><img src="${insp.icon}" alt=""></span>`
+    ? `<span class="app-ico has-img"><img src="${insp.icon}" alt=""></span>`
     : appInitialTile(insp.name || 'App');
   return `
     <div class="card">
@@ -2944,6 +3249,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (e) => {
     if (!$('#search-wrap').contains(e.target)) $('#search-results').classList.add('hidden');
   });
+
+  // Overhang window: the panel stops short of the window bottom so the round
+  // action button can hang half outside it. The button is position:fixed and
+  // centred over the content area, which starts after the sidebar — whose
+  // width changes between full and rail modes — so keep --sidebar-w current.
+  if (window.lcino.overhangWindow) {
+    document.body.classList.add('overhang');
+    const sidebar = $('#sidebar');
+    const syncSidebar = () => document.documentElement.style.setProperty('--sidebar-w', `${sidebar.getBoundingClientRect().width}px`);
+    new ResizeObserver(syncSidebar).observe(sidebar);
+    syncSidebar();
+    window.lcino.onFullscreen((on) => document.body.classList.toggle('fullscreen', on));
+  }
 
   const info = await window.lcino.appInfo();
   $('#sidebar-version').innerHTML = `LcinoCare v${esc(info.version)}<br>${esc(info.slogan)}`;
