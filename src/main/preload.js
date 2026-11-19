@@ -7,6 +7,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('lcino', {
+  // The real app window is transparent with room below the panel (see main.js).
+  overhangWindow: true,
+  onFullscreen: (cb) => ipcRenderer.on('lcino:fullscreen', (_e, on) => cb(!!on)),
+
   scan: () => ipcRenderer.invoke('scan:run'),
   scanCancel: () => ipcRenderer.invoke('scan:cancel'),
   onScanProgress: (cb) => ipcRenderer.on('lcino:scan-progress', (_e, event) => cb(event)),

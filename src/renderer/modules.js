@@ -41,11 +41,14 @@
           <stop stop-color="#fff" stop-opacity=".65"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
         </linearGradient>
       </defs>
-      <ellipse cx="150" cy="278" rx="104" ry="13" fill="#000" opacity=".22"/>
-      <g transform="rotate(-6 ${cx} ${cy})">${shape(uid + 'a', cx, cy)}</g>
-      <g transform="rotate(-6 ${cx} ${cy})" opacity=".8"><path d="M62 66 C 100 40 200 38 240 64 C 196 52 106 54 62 66 Z" fill="#fff" opacity=".5"/></g>
-      <ellipse cx="106" cy="72" rx="52" ry="20" fill="url(#${uid}g)" transform="rotate(-14 106 72)"/>
-      <g transform="translate(${cx - 36 * glyphScale} ${cy - 36 * glyphScale}) scale(${72 * glyphScale / 24})">${glyph}</g>
+      <ellipse class="art-shadow" cx="150" cy="278" rx="104" ry="13" fill="#000" opacity=".22"/>
+      <!-- art-body: everything but the ground shadow, so scan motion moves the object, not its shadow -->
+      <g class="art-body">
+        <g transform="rotate(-6 ${cx} ${cy})">${shape(uid + 'a', cx, cy)}</g>
+        <g transform="rotate(-6 ${cx} ${cy})" opacity=".8"><path d="M62 66 C 100 40 200 38 240 64 C 196 52 106 54 62 66 Z" fill="#fff" opacity=".5"/></g>
+        <ellipse cx="106" cy="72" rx="52" ry="20" fill="url(#${uid}g)" transform="rotate(-14 106 72)"/>
+        <g transform="translate(${cx - 36 * glyphScale} ${cy - 36 * glyphScale}) scale(${72 * glyphScale / 24})">${glyph}</g>
+      </g>
     </svg>`;
   }
 

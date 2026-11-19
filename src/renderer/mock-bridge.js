@@ -232,7 +232,11 @@ window.lcino = {
     { label: 'Swap Files', detail: 'Virtual memory in use right now. Restarting the Mac resets them safely.' },
     { label: 'Temp Folders (/private/var/folders)', detail: 'Managed by macOS itself; it cleans these automatically.' }
   ]),
-  appMeta: (p) => Promise.resolve({ icon: null, version: '4.2.1', addedMs: Date.now() - 90 * 86400000 }),
+  appMeta: (p) => {
+    const name = p.split('/').pop().replace('.app', '');
+    const vendor = /Adobe/.test(name) ? 'adobe' : /Chrome/.test(name) ? 'google' : /Visual Studio/.test(name) ? 'microsoft' : name.toLowerCase().replace(/\W+/g, '');
+    return Promise.resolve({ icon: null, version: '4.2.1', addedMs: Date.now() - 90 * 86400000, bundleId: `com.${vendor}.${name.replace(/\W+/g, '')}`, appStore: /Telegram/.test(name) });
+  },
   appSize: (p) => Promise.resolve(Math.round((0.2 + (p.length % 30) / 10) * 1024 * 1024 * 1024)),
   listLocations: () => Promise.resolve([
     { id: 'home', name: 'Home Folder', path: '/Users/anamdev' },

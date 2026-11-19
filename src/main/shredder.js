@@ -9,13 +9,21 @@
 
 const fs = require('fs');
 const fsp = fs.promises;
+const { isProtectedLocation } = require('./cleaner');
 
 async function shredOne(p, { passes = 1 } = {}) {
   let st;
-  try { st = await fsp.stat(p); } catch (e) { return { path: p, ok: false, reason: 'File not found.' }; }
+  // lstat, not stat: a symlink must never lead the overwrite to its target.
+  try { st = await fsp.lstat(p); } catch (e) { return { path: p, ok: false, reason: 'File not found.' }; }
+  if (st.isSymbolicLink()) return { path: p, ok: false, reason: 'Shortcuts (symlinks) are not shreddable — pick the original file.' };
   if (st.isDirectory()) return { path: p, ok: false, reason: 'Folders are not shreddable — pick individual files.' };
+  if (!st.isFile()) return { path: p, ok: false, reason: 'Only regular files can be shredded.' };
+  // A hard-linked file shares its bytes with another name; overwriting would destroy both.
+  if (st.nlink > 1) return { path: p, ok: false, reason: 'This file has other hard links — shredding would destroy them too.' };
+  if (isProtectedLocation(p)) return { path: p, ok: false, reason: 'This location is protected and cannot be shredded.' };
 
-  const handle = await fsp.open(p, 'r+');
+  // O_NOFOLLOW closes the gap between the checks above and the open.
+  const handle = await fsp.open(p, fs.constants.O_RDWR | fs.constants.O_NOFOLLOW);
   try {
     const CHUNK = 512 * 1024;
     const chunk = Buffer.alloc(CHUNK);

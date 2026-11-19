@@ -115,13 +115,15 @@ const RULES = [
     id: 'claude-vm-bundles',
     group: 'app-data-bloat',
     label: 'Claude Desktop VM Bundles',
-    safety: 'safe',
+    // 'review', not 'safe': the folder holds the VM image Claude is using right
+    // now (rootfs.img), so it must never go out silently via Quick Clean.
+    safety: 'review',
     paths: ['~/Library/Application Support/Claude/vm_bundles'],
     processNames: ['Claude'],
     appDisplayName: 'Claude',
     requiresAppQuit: true,
-    whatItIs: 'Downloaded Linux VM images used by the Claude desktop app for its VM/agent mode. New versions pile up next to old ones.',
-    appImpact: 'Claude works normally; if a VM bundle is ever needed again it is downloaded automatically.'
+    whatItIs: 'Linux VM images used by the Claude desktop app for its VM/agent mode, including the one it is using now. Older versions can pile up next to the current one.',
+    appImpact: 'Claude re-downloads the VM image the next time it needs it, which can take a while on a slow connection.'
   },
   {
     id: 'claude-electron-caches',
